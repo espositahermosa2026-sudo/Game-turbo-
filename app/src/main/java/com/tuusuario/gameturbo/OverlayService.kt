@@ -122,6 +122,8 @@ class OverlayService : Service() {
                         when (label) {
                             "Liberar RAM" -> ShizukuHelper.freeRam()
                             "Alto rendimiento" -> ShizukuHelper.highPerformance(true)
+                            "Bloquear llamadas" -> ShizukuHelper.blockCalls(true)
+                            "Bloquear notif." -> ShizukuHelper.blockNotifications(true)
                         }
                     }.start()
                 }

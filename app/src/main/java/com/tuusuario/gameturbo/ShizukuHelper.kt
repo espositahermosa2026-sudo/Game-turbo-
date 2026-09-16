@@ -56,4 +56,14 @@ object ShizukuHelper {
         val governor = if (enable) "performance" else "schedutil"
         runCommand("for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $governor > \$cpu; done")
     }
+
+    fun blockCalls(enable: Boolean) {
+        val mode = if (enable) 3 else 0
+        runCommand("settings put global zen_mode $mode")
+    }
+
+    fun blockNotifications(enable: Boolean) {
+        val mode = if (enable) 3 else 0
+        runCommand("settings put global zen_mode $mode")
+    }
 }
