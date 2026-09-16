@@ -51,4 +51,9 @@ object ShizukuHelper {
     fun freeRam() {
         runCommand("am kill-all")
     }
+
+    fun highPerformance(enable: Boolean) {
+        val governor = if (enable) "performance" else "schedutil"
+        runCommand("for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $governor > \$cpu; done")
+    }
 }

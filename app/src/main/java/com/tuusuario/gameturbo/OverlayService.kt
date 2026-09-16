@@ -118,11 +118,12 @@ class OverlayService : Service() {
                     setMargins(8, 8, 8, 8)
                 }
                 setOnClickListener {
-                    if (label == "Liberar RAM") {
-                        Thread {
-                            ShizukuHelper.freeRam()
-                        }.start()
-                    }
+                    Thread {
+                        when (label) {
+                            "Liberar RAM" -> ShizukuHelper.freeRam()
+                            "Alto rendimiento" -> ShizukuHelper.highPerformance(true)
+                        }
+                    }.start()
                 }
             }
             grid.addView(item)
