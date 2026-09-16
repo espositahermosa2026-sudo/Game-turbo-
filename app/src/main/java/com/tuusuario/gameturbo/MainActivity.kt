@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MainScreen()
         }
+        ShizukuHelper.requestPermission()
     }
 }
 
