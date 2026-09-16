@@ -99,5 +99,5 @@ fun TurboCard(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
             )
         )
     }
-}0
+}
 
