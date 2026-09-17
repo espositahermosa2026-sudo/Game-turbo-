@@ -4,12 +4,14 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Color as AColor
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.IBinder
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.GridLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 
 class OverlayService : Service() {
@@ -30,22 +32,25 @@ class OverlayService : Service() {
     private fun showBubble() {
         val bubble = TextView(this).apply {
             text = "⚡"
-            textSize = 22f
+            textSize = 20f
             setTextColor(AColor.WHITE)
-            setBackgroundColor(AColor.parseColor("#9D4EDD"))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(AColor.parseColor("#CC9D4EDD"))
+            }
             gravity = Gravity.CENTER
-            setPadding(30, 30, 30, 30)
+            setPadding(20, 20, 20, 20)
         }
 
         val params = WindowManager.LayoutParams(
-            130, 130,
+            110, 110,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         )
         params.gravity = Gravity.TOP or Gravity.START
         params.x = 0
-        params.y = 200
+        params.y = 300
 
         var initialX = 0
         var initialY = 0
@@ -93,43 +98,75 @@ class OverlayService : Service() {
     }
 
     private fun showPanel() {
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = 24f
+                setColor(AColor.parseColor("#CC0A0A0F"))
+            }
+            setPadding(20, 20, 20, 20)
+        }
+
         val grid = GridLayout(this).apply {
             columnCount = 4
-            setBackgroundColor(AColor.parseColor("#E60A0A0F"))
-            setPadding(24, 24, 24, 24)
+            rowCount = 2
         }
 
         val functions = listOf(
-            "Liberar RAM", "Alto rendimiento", "Bloquear llamadas", "Bloquear notif.",
-            "Sin vibracion", "Bloquear gestos", "Info tiempo real", "Grabar pantalla"
+            "⚡" to "Liberar RAM",
+            "🚀" to "Alto rend.",
+            "📵" to "Bloq. llamadas",
+            "🔕" to "Bloq. notif.",
+            "📳" to "Sin vibración",
+            "✋" to "Bloq. gestos",
+            "📊" to "Info tiempo real",
+            "⏺" to "Grabar pantalla"
         )
 
-        functions.forEach { label ->
-            val item = TextView(this).apply {
-                text = label
-                textSize = 11f
-                setTextColor(AColor.parseColor("#E0AAFF"))
+        functions.forEach { (icon, label) ->
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(16, 24, 16, 24)
-                setBackgroundColor(AColor.parseColor("#17121F"))
                 layoutParams = GridLayout.LayoutParams().apply {
-                    width = 150
-                    height = 150
-                    setMargins(8, 8, 8, 8)
+                    width = 130
+                    height = 130
+                    setMargins(6, 6, 6, 6)
+                }
+                background = GradientDrawable().apply {
+                    cornerRadius = 16f
+                    setColor(AColor.parseColor("#B317121F"))
                 }
                 setOnClickListener {
                     Thread {
                         when (label) {
                             "Liberar RAM" -> ShizukuHelper.freeRam()
-                            "Alto rendimiento" -> ShizukuHelper.highPerformance(true)
-                            "Bloquear llamadas" -> ShizukuHelper.blockCalls(true)
-                            "Bloquear notif." -> ShizukuHelper.blockNotifications(true)
+                            "Alto rend." -> ShizukuHelper.highPerformance(true)
+                            "Bloq. llamadas" -> ShizukuHelper.blockCalls(true)
+                            "Bloq. notif." -> ShizukuHelper.blockNotifications(true)
                         }
                     }.start()
                 }
             }
+
+            val iconView = TextView(this).apply {
+                text = icon
+                textSize = 20f
+                gravity = Gravity.CENTER
+            }
+            val labelView = TextView(this).apply {
+                text = label
+                textSize = 8f
+                setTextColor(AColor.parseColor("#E0AAFF"))
+                gravity = Gravity.CENTER
+                setPadding(2, 4, 2, 0)
+            }
+
+            item.addView(iconView)
+            item.addView(labelView)
             grid.addView(item)
         }
+
+        outer.addView(grid)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -140,10 +177,10 @@ class OverlayService : Service() {
         )
         params.gravity = Gravity.TOP or Gravity.START
         params.x = 0
-        params.y = 350
+        params.y = 250
 
-        panelView = grid
-        windowManager.addView(grid, params)
+        panelView = outer
+        windowManager.addView(outer, params)
     }
 
     override fun onDestroy() {
