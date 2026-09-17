@@ -43,7 +43,7 @@ fun MainScreen() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("GAME TURBO", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("GAMEPLAY", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(40.dp))
 
         Button(
@@ -61,7 +61,7 @@ fun MainScreen() {
             },
             colors = ButtonDefaults.buttonColors(containerColor = VioletNeon)
         ) {
-            Text("Activar Game Turbo", color = Color.White)
+            Text("Activar Gameplay", color = Color.White)
         }
     }
 }
