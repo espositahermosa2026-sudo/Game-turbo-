@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.GridLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -22,7 +23,7 @@ class OverlayService : Service() {
     private var panelVisible = false
 
     private val orange = "#FFA726"
-    private val darkBg = "#E6141414"
+    private val darkBg = "#EE141414"
     private val darkCard = "#B3222222"
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -114,74 +115,99 @@ class OverlayService : Service() {
 
     private fun showPanel() {
         val root = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 cornerRadius = 28f
                 setColor(AColor.parseColor(darkBg))
             }
-            setPadding(20, 20, 20, 20)
+            setPadding(24, 20, 24, 20)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val title = TextView(this).apply {
+            text = "GAMEPLAY"
+            textSize = 14f
+            setTextColor(AColor.parseColor(orange))
+            setPadding(0, 0, 0, 20)
+        }
+        root.addView(title)
+
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
         }
 
         // Columna izquierda: lista vertical
         val leftList = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
-                380, LinearLayout.LayoutParams.WRAP_CONTENT
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
             )
         }
 
         val listFunctions = listOf(
-            "⚡" to "Liberar RAM",
-            "🚀" to "Alto rend.",
-            "📵" to "Bloq. llamadas",
-            "🔕" to "Bloq. notif."
+            R.drawable.ic_ram to "Liberar RAM",
+            R.drawable.ic_cpu to "Alto rend.",
+            R.drawable.ic_call_off to "Bloq. llamadas",
+            R.drawable.ic_bell_off to "Bloq. notif."
         )
 
-        listFunctions.forEach { (icon, label) ->
-            val row = LinearLayout(this).apply {
+        listFunctions.forEach { (iconRes, label) ->
+            val itemRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(16, 20, 16, 20)
+                setPadding(8, 18, 8, 18)
                 setOnClickListener { runFunction(label) }
             }
-            val iconView = TextView(this).apply {
-                text = icon
-                textSize = 20f
-                setPadding(0, 0, 24, 0)
+            val iconView = ImageView(this).apply {
+                setImageResource(iconRes)
+                layoutParams = LinearLayout.LayoutParams(48, 48).apply {
+                    marginEnd = 20
+                }
             }
             val labelView = TextView(this).apply {
                 text = label
                 textSize = 12f
                 setTextColor(AColor.parseColor(orange))
+                layoutParams = LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                )
             }
-            row.addView(iconView)
-            row.addView(labelView)
-            leftList.addView(row)
+            val dotsView = ImageView(this).apply {
+                setImageResource(R.drawable.ic_dots)
+                layoutParams = LinearLayout.LayoutParams(32, 32)
+            }
+            itemRow.addView(iconView)
+            itemRow.addView(labelView)
+            itemRow.addView(dotsView)
+            leftList.addView(itemRow)
         }
 
         // Columna derecha: grid de iconos
         val rightGrid = GridLayout(this).apply {
             columnCount = 2
-            rowCount = 4
+            rowCount = 2
             layoutParams = LinearLayout.LayoutParams(
-                300, LinearLayout.LayoutParams.WRAP_CONTENT
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
             )
         }
 
         val gridFunctions = listOf(
-            "📳" to "Sin vibración",
-            "✋" to "Bloq. gestos",
-            "📊" to "Info real",
-            "⏺" to "Grabar"
+            R.drawable.ic_vibrate_off to "Sin vibración",
+            R.drawable.ic_gesture_off to "Bloq. gestos",
+            R.drawable.ic_chart to "Info real",
+            R.drawable.ic_record to "Grabar"
         )
 
-        gridFunctions.forEach { (icon, label) ->
+        gridFunctions.forEach { (iconRes, label) ->
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 layoutParams = GridLayout.LayoutParams().apply {
-                    width = 130
-                    height = 130
+                    width = 140
+                    height = 140
                     setMargins(6, 6, 6, 6)
                 }
                 background = GradientDrawable().apply {
@@ -190,28 +216,28 @@ class OverlayService : Service() {
                 }
                 setOnClickListener { runFunction(label) }
             }
-            val iconView = TextView(this).apply {
-                text = icon
-                textSize = 18f
-                gravity = Gravity.CENTER
+            val iconView = ImageView(this).apply {
+                setImageResource(iconRes)
+                layoutParams = LinearLayout.LayoutParams(40, 40)
             }
             val labelView = TextView(this).apply {
                 text = label
                 textSize = 8f
                 setTextColor(AColor.parseColor(orange))
                 gravity = Gravity.CENTER
-                setPadding(2, 4, 2, 0)
+                setPadding(2, 6, 2, 0)
             }
             item.addView(iconView)
             item.addView(labelView)
             rightGrid.addView(item)
         }
 
-        root.addView(leftList)
-        root.addView(rightGrid)
+        row.addView(leftList)
+        row.addView(rightGrid)
+        root.addView(row)
 
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
