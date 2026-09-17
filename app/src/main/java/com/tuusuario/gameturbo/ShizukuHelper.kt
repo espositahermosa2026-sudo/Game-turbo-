@@ -66,3 +66,4 @@ object ShizukuHelper {
         val mode = if (enable) 3 else 0
         runCommand("cmd notification set_dnd $mode")
     }
+}
