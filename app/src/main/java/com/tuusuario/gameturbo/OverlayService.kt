@@ -21,6 +21,10 @@ class OverlayService : Service() {
     private var panelView: View? = null
     private var panelVisible = false
 
+    private val orange = "#FFA726"
+    private val darkBg = "#E6141414"
+    private val darkCard = "#B3222222"
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -36,7 +40,7 @@ class OverlayService : Service() {
             setTextColor(AColor.WHITE)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(AColor.parseColor("#CC9D4EDD"))
+                setColor(AColor.parseColor(orange))
             }
             gravity = Gravity.CENTER
             setPadding(20, 20, 20, 20)
@@ -97,33 +101,81 @@ class OverlayService : Service() {
         }
     }
 
+    private fun runFunction(label: String) {
+        Thread {
+            when (label) {
+                "Liberar RAM" -> ShizukuHelper.freeRam()
+                "Alto rend." -> ShizukuHelper.highPerformance(true)
+                "Bloq. llamadas" -> ShizukuHelper.blockCalls(true)
+                "Bloq. notif." -> ShizukuHelper.blockNotifications(true)
+            }
+        }.start()
+    }
+
     private fun showPanel() {
-        val outer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             background = GradientDrawable().apply {
-                cornerRadius = 24f
-                setColor(AColor.parseColor("#CC0A0A0F"))
+                cornerRadius = 28f
+                setColor(AColor.parseColor(darkBg))
             }
             setPadding(20, 20, 20, 20)
         }
 
-        val grid = GridLayout(this).apply {
-            columnCount = 4
-            rowCount = 2
+        // Columna izquierda: lista vertical
+        val leftList = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                380, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         }
 
-        val functions = listOf(
+        val listFunctions = listOf(
             "⚡" to "Liberar RAM",
             "🚀" to "Alto rend.",
             "📵" to "Bloq. llamadas",
-            "🔕" to "Bloq. notif.",
-            "📳" to "Sin vibración",
-            "✋" to "Bloq. gestos",
-            "📊" to "Info tiempo real",
-            "⏺" to "Grabar pantalla"
+            "🔕" to "Bloq. notif."
         )
 
-        functions.forEach { (icon, label) ->
+        listFunctions.forEach { (icon, label) ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(16, 20, 16, 20)
+                setOnClickListener { runFunction(label) }
+            }
+            val iconView = TextView(this).apply {
+                text = icon
+                textSize = 20f
+                setPadding(0, 0, 24, 0)
+            }
+            val labelView = TextView(this).apply {
+                text = label
+                textSize = 12f
+                setTextColor(AColor.parseColor(orange))
+            }
+            row.addView(iconView)
+            row.addView(labelView)
+            leftList.addView(row)
+        }
+
+        // Columna derecha: grid de iconos
+        val rightGrid = GridLayout(this).apply {
+            columnCount = 2
+            rowCount = 4
+            layoutParams = LinearLayout.LayoutParams(
+                300, LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val gridFunctions = listOf(
+            "📳" to "Sin vibración",
+            "✋" to "Bloq. gestos",
+            "📊" to "Info real",
+            "⏺" to "Grabar"
+        )
+
+        gridFunctions.forEach { (icon, label) ->
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
@@ -134,39 +186,29 @@ class OverlayService : Service() {
                 }
                 background = GradientDrawable().apply {
                     cornerRadius = 16f
-                    setColor(AColor.parseColor("#B317121F"))
+                    setColor(AColor.parseColor(darkCard))
                 }
-                setOnClickListener {
-                    Thread {
-                        when (label) {
-                            "Liberar RAM" -> ShizukuHelper.freeRam()
-                            "Alto rend." -> ShizukuHelper.highPerformance(true)
-                            "Bloq. llamadas" -> ShizukuHelper.blockCalls(true)
-                            "Bloq. notif." -> ShizukuHelper.blockNotifications(true)
-                        }
-                    }.start()
-                }
+                setOnClickListener { runFunction(label) }
             }
-
             val iconView = TextView(this).apply {
                 text = icon
-                textSize = 20f
+                textSize = 18f
                 gravity = Gravity.CENTER
             }
             val labelView = TextView(this).apply {
                 text = label
                 textSize = 8f
-                setTextColor(AColor.parseColor("#E0AAFF"))
+                setTextColor(AColor.parseColor(orange))
                 gravity = Gravity.CENTER
                 setPadding(2, 4, 2, 0)
             }
-
             item.addView(iconView)
             item.addView(labelView)
-            grid.addView(item)
+            rightGrid.addView(item)
         }
 
-        outer.addView(grid)
+        root.addView(leftList)
+        root.addView(rightGrid)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -177,10 +219,10 @@ class OverlayService : Service() {
         )
         params.gravity = Gravity.TOP or Gravity.START
         params.x = 0
-        params.y = 250
+        params.y = 100
 
-        panelView = outer
-        windowManager.addView(outer, params)
+        panelView = root
+        windowManager.addView(root, params)
     }
 
     override fun onDestroy() {
