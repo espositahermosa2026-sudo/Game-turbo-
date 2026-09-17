@@ -59,11 +59,10 @@ object ShizukuHelper {
 
     fun blockCalls(enable: Boolean) {
         val mode = if (enable) 3 else 0
-        runCommand("settings put global zen_mode $mode")
+        runCommand("cmd notification set_dnd $mode")
     }
 
     fun blockNotifications(enable: Boolean) {
         val mode = if (enable) 3 else 0
-        runCommand("settings put global zen_mode $mode")
+        runCommand("cmd notification set_dnd $mode")
     }
-}
