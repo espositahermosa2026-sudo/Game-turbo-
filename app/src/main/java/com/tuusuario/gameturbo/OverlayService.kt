@@ -50,18 +50,19 @@ class OverlayService : Service() {
     private fun showBubble() {
         val bubble = TextView(this).apply {
             text = "⚡"
-            textSize = 20f
+            textSize = 18f
             setTextColor(AColor.WHITE)
             background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 20f
                 setColor(AColor.parseColor(orange))
             }
             gravity = Gravity.CENTER
-            setPadding(20, 20, 20, 20)
+            setPadding(10, 24, 10, 24)
         }
 
         val params = WindowManager.LayoutParams(
-            110, 110,
+            60, 160,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
@@ -187,7 +188,6 @@ class OverlayService : Service() {
         }
         root.addView(title)
 
-        // Medidor circular de RAM centrado
         val gaugeContainer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -205,7 +205,6 @@ class OverlayService : Service() {
             orientation = LinearLayout.HORIZONTAL
         }
 
-        // Columna izquierda: lista vertical
         val leftList = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
@@ -251,7 +250,6 @@ class OverlayService : Service() {
             leftList.addView(itemRow)
         }
 
-        // Columna derecha: grid de iconos
         val rightGrid = GridLayout(this).apply {
             columnCount = 2
             rowCount = 2
