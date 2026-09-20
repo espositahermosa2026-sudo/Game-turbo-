@@ -48,21 +48,20 @@ class OverlayService : Service() {
     }
 
     private fun showBubble() {
-        val bubble = TextView(this).apply {
-            text = "⚡"
-            textSize = 18f
-            setTextColor(AColor.WHITE)
+        val density = resources.displayMetrics.density
+        val barWidthPx = (20 * density).toInt()
+        val barHeightPx = (140 * density).toInt()
+
+        val bubble = View(this).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = 20f
+                cornerRadii = floatArrayOf(0f, 0f, 24f, 24f, 24f, 24f, 0f, 0f)
                 setColor(AColor.parseColor(orange))
             }
-            gravity = Gravity.CENTER
-            setPadding(10, 24, 10, 24)
         }
 
         val params = WindowManager.LayoutParams(
-            60, 160,
+            barWidthPx, barHeightPx,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
@@ -88,10 +87,14 @@ class OverlayService : Service() {
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    params.x = initialX + (event.rawX - touchX).toInt()
-                    params.y = initialY + (event.rawY - touchY).toInt()
-                    windowManager.updateViewLayout(bubble, params)
-                    moved = true
+                    val dx = event.rawX - touchX
+                    val dy = event.rawY - touchY
+                    if (kotlin.math.abs(dx) > 10 || kotlin.math.abs(dy) > 10) {
+                        params.x = initialX + dx.toInt()
+                        params.y = initialY + dy.toInt()
+                        windowManager.updateViewLayout(bubble, params)
+                        moved = true
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -180,13 +183,28 @@ class OverlayService : Service() {
             )
         }
 
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
         val title = TextView(this).apply {
             text = "GAMEPLAY"
             textSize = 14f
             setTextColor(AColor.parseColor(orange))
-            setPadding(0, 0, 0, 12)
+            layoutParams = LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            )
         }
-        root.addView(title)
+        val closeBtn = TextView(this).apply {
+            text = "✕"
+            textSize = 16f
+            setTextColor(AColor.parseColor(orange))
+            setPadding(16, 8, 16, 8)
+            setOnClickListener { togglePanel() }
+        }
+        titleRow.addView(title)
+        titleRow.addView(closeBtn)
+        root.addView(titleRow)
 
         val gaugeContainer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
