@@ -1,9 +1,14 @@
 package com.tuusuario.gameturbo
 
+import android.app.ActivityManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.graphics.Canvas
 import android.graphics.Color as AColor
+import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
 import android.os.IBinder
 import android.view.Gravity
@@ -32,6 +37,14 @@ class OverlayService : Service() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         showBubble()
+    }
+
+    private fun getRamUsagePercent(): Int {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(info)
+        val used = info.totalMem - info.availMem
+        return ((used.toFloat() / info.totalMem.toFloat()) * 100).toInt()
     }
 
     private fun showBubble() {
@@ -113,6 +126,45 @@ class OverlayService : Service() {
         }.start()
     }
 
+    private inner class GaugeView(context: Context, private val percent: Int) : View(context) {
+        private val bgPaint = Paint().apply {
+            color = AColor.parseColor("#333333")
+            style = Paint.Style.STROKE
+            strokeWidth = 14f
+            isAntiAlias = true
+            strokeCap = Paint.Cap.ROUND
+        }
+        private val fgPaint = Paint().apply {
+            color = AColor.parseColor(orange)
+            style = Paint.Style.STROKE
+            strokeWidth = 14f
+            isAntiAlias = true
+            strokeCap = Paint.Cap.ROUND
+        }
+        private val textPaint = Paint().apply {
+            color = AColor.WHITE
+            textSize = 26f
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+        }
+        private val labelPaint = Paint().apply {
+            color = AColor.parseColor(orange)
+            textSize = 14f
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val stroke = 14f
+            val rect = RectF(stroke, stroke, width - stroke, height - stroke)
+            canvas.drawArc(rect, 135f, 270f, false, bgPaint)
+            canvas.drawArc(rect, 135f, 270f * (percent / 100f), false, fgPaint)
+            canvas.drawText("$percent%", width / 2f, height / 2f, textPaint)
+            canvas.drawText("RAM", width / 2f, height / 2f + 28f, labelPaint)
+        }
+    }
+
     private fun showPanel() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -131,9 +183,23 @@ class OverlayService : Service() {
             text = "GAMEPLAY"
             textSize = 14f
             setTextColor(AColor.parseColor(orange))
-            setPadding(0, 0, 0, 20)
+            setPadding(0, 0, 0, 12)
         }
         root.addView(title)
+
+        // Medidor circular de RAM centrado
+        val gaugeContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 160
+            )
+        }
+        val gauge = GaugeView(this, getRamUsagePercent()).apply {
+            layoutParams = LinearLayout.LayoutParams(160, 160)
+        }
+        gaugeContainer.addView(gauge)
+        root.addView(gaugeContainer)
 
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
