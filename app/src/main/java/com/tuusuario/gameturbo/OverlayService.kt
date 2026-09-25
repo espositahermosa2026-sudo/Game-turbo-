@@ -18,7 +18,6 @@ import android.view.WindowManager
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 
 class OverlayService : Service() {
@@ -54,19 +53,22 @@ class OverlayService : Service() {
     }
 
     private fun showBubble() {
-        val barWidthPx = cmToPx(1f)
-        val barHeightPx = cmToPx(3f)
+        val sizePx = cmToPx(1f)
 
-        val bubble = View(this).apply {
+        val bubble = TextView(this).apply {
+            text = "⚡"
+            textSize = 14f
+            setTextColor(AColor.WHITE)
+            gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadii = floatArrayOf(0f, 0f, 24f, 24f, 24f, 24f, 0f, 0f)
+                cornerRadii = floatArrayOf(0f, 0f, 20f, 20f, 20f, 20f, 0f, 0f)
                 setColor(AColor.parseColor(orange))
             }
         }
 
         val params = WindowManager.LayoutParams(
-            barWidthPx, barHeightPx,
+            sizePx, sizePx,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
@@ -139,47 +141,53 @@ class OverlayService : Service() {
         private val bgPaint = Paint().apply {
             color = AColor.parseColor("#333333")
             style = Paint.Style.STROKE
-            strokeWidth = 10f
+            strokeWidth = 14f
             isAntiAlias = true
             strokeCap = Paint.Cap.ROUND
         }
         private val fgPaint = Paint().apply {
             color = AColor.parseColor(orange)
             style = Paint.Style.STROKE
-            strokeWidth = 10f
+            strokeWidth = 14f
             isAntiAlias = true
             strokeCap = Paint.Cap.ROUND
         }
         private val textPaint = Paint().apply {
             color = AColor.WHITE
-            textSize = 20f
+            textSize = 26f
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
         }
         private val labelPaint = Paint().apply {
             color = AColor.parseColor(orange)
-            textSize = 11f
+            textSize = 14f
             isAntiAlias = true
             textAlign = Paint.Align.CENTER
         }
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            val stroke = 10f
+            val stroke = 14f
             val rect = RectF(stroke, stroke, width - stroke, height - stroke)
             canvas.drawArc(rect, 135f, 270f, false, bgPaint)
             canvas.drawArc(rect, 135f, 270f * (percent / 100f), false, fgPaint)
             canvas.drawText("$percent%", width / 2f, height / 2f, textPaint)
-            canvas.drawText("RAM", width / 2f, height / 2f + 22f, labelPaint)
+            canvas.drawText("RAM", width / 2f, height / 2f + 28f, labelPaint)
         }
     }
 
     private fun showPanel() {
-        val panelSizePx = cmToPx(5f)
-
-        val content = LinearLayout(this).apply {
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(16, 12, 16, 12)
+            background = GradientDrawable().apply {
+                cornerRadius = 28f
+                setColor(AColor.parseColor(darkBg))
+            }
+            setPadding(24, 20, 24, 20)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         }
 
         val titleRow = LinearLayout(this).apply {
@@ -188,7 +196,7 @@ class OverlayService : Service() {
         }
         val title = TextView(this).apply {
             text = "GAMEPLAY"
-            textSize = 11f
+            textSize = 14f
             setTextColor(AColor.parseColor(orange))
             layoutParams = LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
@@ -196,84 +204,130 @@ class OverlayService : Service() {
         }
         val closeBtn = TextView(this).apply {
             text = "✕"
-            textSize = 13f
+            textSize = 16f
             setTextColor(AColor.parseColor(orange))
-            setPadding(10, 4, 10, 4)
+            setPadding(16, 8, 16, 8)
             setOnClickListener { togglePanel() }
         }
         titleRow.addView(title)
         titleRow.addView(closeBtn)
-        content.addView(titleRow)
+        root.addView(titleRow)
 
         val gaugeContainer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 100
+                LinearLayout.LayoutParams.MATCH_PARENT, 160
             )
         }
         val gauge = GaugeView(this, getRamUsagePercent()).apply {
-            layoutParams = LinearLayout.LayoutParams(100, 100)
+            layoutParams = LinearLayout.LayoutParams(160, 160)
         }
         gaugeContainer.addView(gauge)
-        content.addView(gaugeContainer)
+        root.addView(gaugeContainer)
+
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+
+        val leftList = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+            )
+        }
 
         val listFunctions = listOf(
             R.drawable.ic_ram to "Liberar RAM",
             R.drawable.ic_cpu to "Alto rend.",
             R.drawable.ic_call_off to "Bloq. llamadas",
-            R.drawable.ic_bell_off to "Bloq. notif.",
-            R.drawable.ic_vibrate_off to "Sin vibración",
-            R.drawable.ic_gesture_off to "Bloq. gestos",
-            R.drawable.ic_chart to "Info real",
-            R.drawable.ic_record to "Grabar"
+            R.drawable.ic_bell_off to "Bloq. notif."
         )
 
         listFunctions.forEach { (iconRes, label) ->
             val itemRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(4, 10, 4, 10)
+                setPadding(8, 18, 8, 18)
                 setOnClickListener { runFunction(label) }
             }
             val iconView = ImageView(this).apply {
                 setImageResource(iconRes)
-                layoutParams = LinearLayout.LayoutParams(36, 36).apply {
-                    marginEnd = 12
+                layoutParams = LinearLayout.LayoutParams(48, 48).apply {
+                    marginEnd = 20
                 }
             }
             val labelView = TextView(this).apply {
                 text = label
-                textSize = 9f
+                textSize = 12f
                 setTextColor(AColor.parseColor(orange))
                 layoutParams = LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
                 )
             }
+            val dotsView = ImageView(this).apply {
+                setImageResource(R.drawable.ic_dots)
+                layoutParams = LinearLayout.LayoutParams(32, 32)
+            }
             itemRow.addView(iconView)
             itemRow.addView(labelView)
-            content.addView(itemRow)
+            itemRow.addView(dotsView)
+            leftList.addView(itemRow)
         }
 
-        val scroll = ScrollView(this).apply {
+        val rightGrid = GridLayout(this).apply {
+            columnCount = 2
+            rowCount = 2
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
             )
-            addView(content)
         }
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                cornerRadius = 20f
-                setColor(AColor.parseColor(darkBg))
+        val gridFunctions = listOf(
+            R.drawable.ic_vibrate_off to "Sin vibración",
+            R.drawable.ic_gesture_off to "Bloq. gestos",
+            R.drawable.ic_chart to "Info real",
+            R.drawable.ic_record to "Grabar"
+        )
+
+        gridFunctions.forEach { (iconRes, label) ->
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                layoutParams = GridLayout.LayoutParams().apply {
+                    width = 140
+                    height = 140
+                    setMargins(6, 6, 6, 6)
+                }
+                background = GradientDrawable().apply {
+                    cornerRadius = 16f
+                    setColor(AColor.parseColor(darkCard))
+                }
+                setOnClickListener { runFunction(label) }
             }
-            addView(scroll)
+            val iconView = ImageView(this).apply {
+                setImageResource(iconRes)
+                layoutParams = LinearLayout.LayoutParams(40, 40)
+            }
+            val labelView = TextView(this).apply {
+                text = label
+                textSize = 8f
+                setTextColor(AColor.parseColor(orange))
+                gravity = Gravity.CENTER
+                setPadding(2, 6, 2, 0)
+            }
+            item.addView(iconView)
+            item.addView(labelView)
+            rightGrid.addView(item)
         }
+
+        row.addView(leftList)
+        row.addView(rightGrid)
+        root.addView(row)
 
         val params = WindowManager.LayoutParams(
-            panelSizePx, panelSizePx,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
