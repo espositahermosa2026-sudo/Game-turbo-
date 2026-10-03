@@ -3,7 +3,6 @@ import android.app.ActivityManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color as AColor
 import android.graphics.ColorFilter
@@ -59,8 +58,6 @@ class OverlayService : Service() {
     "Bloq. notif." to false,
     "Sin vibración" to false
   )
-  private var currentFps = "--"
-  private var currentCpu = "--"
   private val handler = Handler(Looper.getMainLooper())
   private var statsView: StatsView? = null
   private val statsRunnable = object : Runnable {
@@ -101,8 +98,8 @@ class OverlayService : Service() {
   private fun refreshStats() {
     statsView?.let {
       it.ram = getRamUsagePercent()
-      it.fps = currentFps
-      it.cpu = currentCpu
+      it.fps = ShizukuHelper.fps
+      it.cpu = ShizukuHelper.cpu
       it.invalidate()
     }
   }
@@ -169,12 +166,14 @@ class OverlayService : Service() {
   private fun togglePanel() {
     if (panelVisible) {
       handler.removeCallbacks(statsRunnable)
+      ShizukuHelper.stopStats()
       statsView = null
       panelView?.let { windowManager.removeView(it) }
       panelVisible = false
     } else {
       showPanel()
       panelVisible = true
+      ShizukuHelper.startStats()
       handler.post(statsRunnable)
     }
   }
@@ -400,6 +399,7 @@ class OverlayService : Service() {
   override fun onDestroy() {
     super.onDestroy()
     handler.removeCallbacks(statsRunnable)
+    ShizukuHelper.stopStats()
     bubbleView?.let { windowManager.removeView(it) }
     if (panelVisible) panelView?.let { windowManager.removeView(it) }
   }
