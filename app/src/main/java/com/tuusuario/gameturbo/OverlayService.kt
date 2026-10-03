@@ -228,203 +228,6 @@ class OverlayService : Service() {
     }
 
     // ------------------------------------------------------------------
-    // Marco completo del HUD (mismo contorno que la referencia)
-    // Se dibuja en una cuadrícula de diseño de 1280 x 300 y se escala.
-    // ------------------------------------------------------------------
-    private class HudDrawable(fillColor: Int, strokeColor: Int) : Drawable() {
-        private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = fillColor
-            style = Paint.Style.FILL
-        }
-        private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = strokeColor
-            style = Paint.Style.STROKE
-            strokeWidth = 3f
-            strokeJoin = Paint.Join.ROUND
-        }
-        private val path = Path().apply {
-            // arriba: panel izquierdo -> puente -> panel derecho
-            moveTo(45f, 0f)
-            lineTo(260f, 0f)
-            lineTo(385f, 30f)
-            lineTo(895f, 30f)
-            lineTo(1020f, 0f)
-            lineTo(1235f, 0f)
-            lineTo(1280f, 45f)
-            // lado derecho
-            lineTo(1280f, 255f)
-            lineTo(1235f, 300f)
-            // abajo: panel derecho -> puente con pestaña central -> panel izquierdo
-            lineTo(1020f, 300f)
-            lineTo(895f, 270f)
-            lineTo(740f, 270f)
-            lineTo(715f, 300f)
-            lineTo(565f, 300f)
-            lineTo(540f, 270f)
-            lineTo(385f, 270f)
-            lineTo(260f, 300f)
-            lineTo(45f, 300f)
-            lineTo(0f, 255f)
-            // lado izquierdo
-            lineTo(0f, 45f)
-            close()
-        }
-
-        override fun draw(canvas: Canvas) {
-            val unit = bounds.width() / 1280f
-            val pad = 2f * unit
-            val sw = (bounds.width() - 2 * pad) / 1280f
-            val sh = (bounds.height() - 2 * pad) / 300f
-            canvas.save()
-            canvas.translate(bounds.left + pad, bounds.top + pad)
-            canvas.scale(sw, sh)
-            canvas.drawPath(path, fillPaint)
-            canvas.drawPath(path, strokePaint)
-            canvas.restore()
-        }
-
-        override fun setAlpha(alpha: Int) {
-            fillPaint.alpha = alpha
-            strokePaint.alpha = alpha
-        }
-
-        override fun setColorFilter(colorFilter: ColorFilter?) {
-            fillPaint.colorFilter = colorFilter
-            strokePaint.colorFilter = colorFilter
-        }
-
-        @Suppress("OVERRIDE_DEPRECATION")
-        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-    }
-
-    // Perilla en forma de rombo para los sliders
-    private class DiamondDrawable(private val size: Int, color: Int) : Drawable() {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.color = color
-            style = Paint.Style.FILL
-        }
-        private val path = Path()
-
-        override fun draw(canvas: Canvas) {
-            val cx = bounds.exactCenterX()
-            val cy = bounds.exactCenterY()
-            val r = size / 2f
-            path.reset()
-            path.moveTo(cx, cy - r)
-            path.lineTo(cx + r, cy)
-            path.lineTo(cx, cy + r)
-            path.lineTo(cx - r, cy)
-            path.close()
-            canvas.drawPath(path, paint)
-        }
-
-        override fun getIntrinsicWidth(): Int = size
-        override fun getIntrinsicHeight(): Int = size
-
-        override fun setAlpha(alpha: Int) {
-            paint.alpha = alpha
-        }
-
-        override fun setColorFilter(colorFilter: ColorFilter?) {
-            paint.colorFilter = colorFilter
-        }
-
-        @Suppress("OVERRIDE_DEPRECATION")
-        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-    }
-
-    // ------------------------------------------------------------------
-    // Medidor central: RAM / FPS / CPU con barras curvas a los lados
-    // Cuadrícula de diseño local: 400 x 156
-    // ------------------------------------------------------------------
-    private inner class StatsView(context: Context, private val s: Float) : View(context) {
-        var ram = 0
-        var fps = "--"
-        var cpu = "--"
-
-        private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AColor.parseColor("#55000000")
-            style = Paint.Style.FILL
-        }
-        private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AColor.parseColor("#991DE9B6")
-            style = Paint.Style.STROKE
-            strokeWidth = 2f
-        }
-        private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tealInt
-            style = Paint.Style.FILL
-        }
-        private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tealInt
-            textSize = 32f
-            typeface = Typeface.DEFAULT_BOLD
-            textAlign = Paint.Align.CENTER
-        }
-        private val fpsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AColor.WHITE
-            textSize = 56f
-            typeface = Typeface.DEFAULT_BOLD
-            textAlign = Paint.Align.CENTER
-        }
-        private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = grayText
-            textSize = 20f
-            textAlign = Paint.Align.CENTER
-        }
-        private val shape = Path().apply {
-            moveTo(60f, 12f)
-            lineTo(340f, 12f)
-            lineTo(360f, 32f)
-            lineTo(360f, 128f)
-            lineTo(340f, 148f)
-            lineTo(60f, 148f)
-            lineTo(40f, 128f)
-            lineTo(40f, 32f)
-            close()
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            canvas.save()
-            canvas.scale(s, s)
-
-            // forma interior con esquinas cortadas
-            canvas.drawPath(shape, fillPaint)
-            canvas.drawPath(shape, framePaint)
-
-            // barras curvas: izquierda = RAM, derecha = CPU
-            val filledL = (ram * 7 / 100).coerceIn(0, 7)
-            val cpuVal = cpu.toIntOrNull()
-            val filledR = if (cpuVal != null) (cpuVal * 7 / 100).coerceIn(0, 7) else 0
-            for (i in 0 until 7) {
-                val t = (i - 3) / 3f
-                val off = 12f * t * t
-                val y = 8f + i * 20f
-                val level = 6 - i                       // 0 = segmento de abajo
-
-                barPaint.alpha = if (level < filledL) 255 else 70
-                canvas.drawRoundRect(6f + off, y, 6f + off + 22f, y + 14f, 4f, 4f, barPaint)
-
-                barPaint.alpha = if (level < filledR) 255 else 70
-                canvas.drawRoundRect(372f - off - 22f, y, 372f - off, y + 14f, 4f, 4f, barPaint)
-            }
-
-            // valores
-            canvas.drawText("$ram%", 97f, 78f, valuePaint)
-            canvas.drawText(fps, 200f, 84f, fpsPaint)
-            canvas.drawText(if (cpu == "--") cpu else "$cpu%", 303f, 78f, valuePaint)
-
-            // etiquetas
-            canvas.drawText("RAM", 97f, 100f, labelPaint)
-            canvas.drawText("FPS", 200f, 110f, labelPaint)
-            canvas.drawText("CPU", 303f, 100f, labelPaint)
-
-            canvas.restore()
-        }
-    }
-
-    // ------------------------------------------------------------------
     // Item de función (círculo + icono + texto)
     // ------------------------------------------------------------------
     private fun circleBg(active: Boolean, s: Float): GradientDrawable =
@@ -556,4 +359,323 @@ class OverlayService : Service() {
         val root = FrameLayout(this)
 
         // 1) Marco con todas las curvas
-        val frame = View(this).apply { background = HudDrawable(pa
+        val frame = View(this).apply { background = HudDrawable(panelBg, tealInt) }
+        root.addView(frame, place(s, 0f, 0f, 1280f, 300f))
+
+        // 2) Hora arriba al centro
+        val clock = TextClock(this).apply {
+            format12Hour = "hh:mm a"
+            format24Hour = "HH:mm"
+            setTextColor(AColor.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, 22f * s)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setShadowLayer(4f, 0f, 0f, AColor.BLACK)
+        }
+        root.addView(clock, place(s, 440f, 2f, 400f, 28f))
+
+        // 3) Medidor central
+        val stats = StatsView(this, s, tealInt, grayText)
+        statsView = stats
+        root.addView(stats, place(s, 440f, 64f, 400f, 156f))
+
+        // 4) Funciones izquierda (2 columnas x 2 filas)
+        val leftItems = listOf(
+            R.drawable.ic_ram to "Liberar RAM",
+            R.drawable.ic_cpu to "Alto rend.",
+            R.drawable.ic_call_off to "Bloq. llamadas",
+            R.drawable.ic_bell_off to "Bloq. notif."
+        )
+        val rightItems = listOf(
+            R.drawable.ic_vibrate_off to "Sin vibración",
+            R.drawable.ic_gesture_off to "Bloq. gestos",
+            R.drawable.ic_chart to "Info real",
+            R.drawable.ic_record to "Grabar"
+        )
+        val leftCols = floatArrayOf(110f, 270f)
+        val rightCols = floatArrayOf(1010f, 1170f)
+        val rowTops = floatArrayOf(18f, 146f)
+
+        leftItems.forEachIndexed { i, (iconRes, label) ->
+            val v = buildItem(iconRes, label, s)
+            root.addView(v, place(s, leftCols[i % 2] - 75f, rowTops[i / 2], 150f, 116f))
+        }
+        rightItems.forEachIndexed { i, (iconRes, label) ->
+            val v = buildItem(iconRes, label, s)
+            root.addView(v, place(s, rightCols[i % 2] - 75f, rowTops[i / 2], 150f, 116f))
+        }
+
+        // 5) Sliders abajo: brillo a la izquierda, volumen a la derecha
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val maxVol = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val curVol = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val curBright = try {
+            Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
+        } catch (e: Exception) {
+            128
+        }
+
+        val brightness = buildSlider("☀", true, 255, curBright, s) { v ->
+            // Necesita el permiso "Modificar ajustes del sistema"; si no lo tiene, no hace nada
+            try {
+                Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, v)
+            } catch (e: Exception) {
+            }
+        }
+        root.addView(brightness, place(s, 20f, 312f, 330f, 46f))
+
+        val volume = buildSlider("🔊", false, maxVol, curVol, s) { v ->
+            try {
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0)
+            } catch (e: Exception) {
+            }
+        }
+        root.addView(volume, place(s, 930f, 312f, 330f, 46f))
+
+        // 6) Cerrar (centro abajo)
+        val closeBtn = TextView(this).apply {
+            text = "✕"
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, 30f * s)
+            setTextColor(tealInt)
+            gravity = Gravity.CENTER
+            setOnClickListener { togglePanel() }
+        }
+        root.addView(closeBtn, place(s, 590f, 312f, 100f, 46f))
+
+        val params = WindowManager.LayoutParams(
+            panelW,
+            (362f * s).toInt(),
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
+        )
+        params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        params.x = 0
+        params.y = dp(4)
+
+        panelView = root
+        windowManager.addView(root, params)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        handler.removeCallbacks(statsRunnable)
+        bubbleView?.let { windowManager.removeView(it) }
+        if (panelVisible) panelView?.let { windowManager.removeView(it) }
+    }
+}
+package com.tuusuario.gameturbo
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color as AColor
+import android.graphics.ColorFilter
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.Drawable
+import android.view.View
+
+// ------------------------------------------------------------------
+// Marco completo del HUD (mismo contorno que la referencia)
+// Se dibuja en una cuadrícula de diseño de 1280 x 300 y se escala.
+// ------------------------------------------------------------------
+class HudDrawable(fillColor: Int, strokeColor: Int) : Drawable() {
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = fillColor
+        style = Paint.Style.FILL
+    }
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = strokeColor
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val path = Path().apply {
+        // arriba: panel izquierdo -> puente -> panel derecho
+        moveTo(45f, 0f)
+        lineTo(260f, 0f)
+        lineTo(385f, 30f)
+        lineTo(895f, 30f)
+        lineTo(1020f, 0f)
+        lineTo(1235f, 0f)
+        lineTo(1280f, 45f)
+        // lado derecho
+        lineTo(1280f, 255f)
+        lineTo(1235f, 300f)
+        // abajo: panel derecho -> puente con pestaña central -> panel izquierdo
+        lineTo(1020f, 300f)
+        lineTo(895f, 270f)
+        lineTo(740f, 270f)
+        lineTo(715f, 300f)
+        lineTo(565f, 300f)
+        lineTo(540f, 270f)
+        lineTo(385f, 270f)
+        lineTo(260f, 300f)
+        lineTo(45f, 300f)
+        lineTo(0f, 255f)
+        // lado izquierdo
+        lineTo(0f, 45f)
+        close()
+    }
+
+    override fun draw(canvas: Canvas) {
+        val unit = bounds.width() / 1280f
+        val pad = 2f * unit
+        val sw = (bounds.width() - 2 * pad) / 1280f
+        val sh = (bounds.height() - 2 * pad) / 300f
+        canvas.save()
+        canvas.translate(bounds.left + pad, bounds.top + pad)
+        canvas.scale(sw, sh)
+        canvas.drawPath(path, fillPaint)
+        canvas.drawPath(path, strokePaint)
+        canvas.restore()
+    }
+
+    override fun setAlpha(alpha: Int) {
+        fillPaint.alpha = alpha
+        strokePaint.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        fillPaint.colorFilter = colorFilter
+        strokePaint.colorFilter = colorFilter
+    }
+
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+// Perilla en forma de rombo para los sliders
+class DiamondDrawable(private val size: Int, color: Int) : Drawable() {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        style = Paint.Style.FILL
+    }
+    private val path = Path()
+
+    override fun draw(canvas: Canvas) {
+        val cx = bounds.exactCenterX()
+        val cy = bounds.exactCenterY()
+        val r = size / 2f
+        path.reset()
+        path.moveTo(cx, cy - r)
+        path.lineTo(cx + r, cy)
+        path.lineTo(cx, cy + r)
+        path.lineTo(cx - r, cy)
+        path.close()
+        canvas.drawPath(path, paint)
+    }
+
+    override fun getIntrinsicWidth(): Int = size
+    override fun getIntrinsicHeight(): Int = size
+
+    override fun setAlpha(alpha: Int) {
+        paint.alpha = alpha
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        paint.colorFilter = colorFilter
+    }
+
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
+// ------------------------------------------------------------------
+// Medidor central: RAM / FPS / CPU con barras curvas a los lados
+// Cuadrícula de diseño local: 400 x 156
+// ------------------------------------------------------------------
+class StatsView(
+context: Context,
+private val s: Float,
+private val accent: Int,
+private val gray: Int
+) : View(context) {
+    var ram = 0
+    var fps = "--"
+    var cpu = "--"
+
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AColor.parseColor("#55000000")
+        style = Paint.Style.FILL
+    }
+    private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AColor.parseColor("#991DE9B6")
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+    private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = accent
+        style = Paint.Style.FILL
+    }
+    private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = accent
+        textSize = 32f
+        typeface = Typeface.DEFAULT_BOLD
+        textAlign = Paint.Align.CENTER
+    }
+    private val fpsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AColor.WHITE
+        textSize = 56f
+        typeface = Typeface.DEFAULT_BOLD
+        textAlign = Paint.Align.CENTER
+    }
+    private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = gray
+        textSize = 20f
+        textAlign = Paint.Align.CENTER
+    }
+    private val shape = Path().apply {
+        moveTo(60f, 12f)
+        lineTo(340f, 12f)
+        lineTo(360f, 32f)
+        lineTo(360f, 128f)
+        lineTo(340f, 148f)
+        lineTo(60f, 148f)
+        lineTo(40f, 128f)
+        lineTo(40f, 32f)
+        close()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        canvas.save()
+        canvas.scale(s, s)
+
+        // forma interior con esquinas cortadas
+        canvas.drawPath(shape, fillPaint)
+        canvas.drawPath(shape, framePaint)
+
+        // barras curvas: izquierda = RAM, derecha = CPU
+        val filledL = (ram * 7 / 100).coerceIn(0, 7)
+        val cpuVal = cpu.toIntOrNull()
+        val filledR = if (cpuVal != null) (cpuVal * 7 / 100).coerceIn(0, 7) else 0
+        for (i in 0 until 7) {
+            val t = (i - 3) / 3f
+            val off = 12f * t * t
+            val y = 8f + i * 20f
+            val level = 6 - i                       // 0 = segmento de abajo
+
+            barPaint.alpha = if (level < filledL) 255 else 70
+            canvas.drawRoundRect(6f + off, y, 6f + off + 22f, y + 14f, 4f, 4f, barPaint)
+
+            barPaint.alpha = if (level < filledR) 255 else 70
+            canvas.drawRoundRect(372f - off - 22f, y, 372f - off, y + 14f, 4f, 4f, barPaint)
+        }
+
+        // valores
+        canvas.drawText("$ram%", 97f, 78f, valuePaint)
+        canvas.drawText(fps, 200f, 84f, fpsPaint)
+        canvas.drawText(if (cpu == "--") cpu else "$cpu%", 303f, 78f, valuePaint)
+
+        // etiquetas
+        canvas.drawText("RAM", 97f, 100f, labelPaint)
+        canvas.drawText("FPS", 200f, 110f, labelPaint)
+        canvas.drawText("CPU", 303f, 100f, labelPaint)
+
+        canvas.restore()
+    }
+}
