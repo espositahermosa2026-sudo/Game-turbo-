@@ -11,8 +11,10 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.graphics.drawable.ClipDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
@@ -264,8 +266,17 @@ class OverlayService : Service() {
     val bar = SeekBar(this).apply {
       this.max = maxValue
       this.progress = startValue
-      progressTintList = ColorStateList.valueOf(tealInt)
-      progressBackgroundTintList = ColorStateList.valueOf(AColor.parseColor("#4D1DE9B6"))
+      val th = dp(BAR_WIDTH_DP)
+      val trackBg = GradientDrawable().apply {
+        setColor(0x801DE9B6.toInt()); cornerRadius = th / 2f; setSize(0, th)
+      }
+      val trackFg = GradientDrawable().apply {
+        setColor(tealInt); cornerRadius = th / 2f; setSize(0, th)
+      }
+      progressDrawable = LayerDrawable(arrayOf(trackBg, ClipDrawable(trackFg, Gravity.START, ClipDrawable.HORIZONTAL))).apply {
+        setId(0, android.R.id.background)
+        setId(1, android.R.id.progress)
+      }
       thumb = DiamondDrawable((22f * s).toInt(), tealInt)
       setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
         override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
