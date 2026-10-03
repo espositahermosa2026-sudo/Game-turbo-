@@ -9,6 +9,7 @@ import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.ClipDrawable
 import android.graphics.drawable.Drawable
@@ -37,7 +38,7 @@ private lateinit var windowManager: WindowManager
 private var bubbleView: View? = null
 private var panelView: View? = null
 private var panelVisible = false
-private var crosshairView: View? = null
+private var mira: MiraManager? = null
 private val tealInt = AColor.parseColor("#1DE9B6")
 private val panelBg = AColor.parseColor("#D90B1412")
 private val grayText = AColor.parseColor("#CFD8DC")
@@ -46,6 +47,7 @@ private val BAR_HEIGHT_CM = 2f
 private val HUD_WIDTH_FRACTION = 0.8f
 private val toggleLabels = setOf(
 "Alto rend.",
+"Girar pantalla",
 "Crosshair Assistant",
 "Bloq. notif.",
 "Bloq. gestos",
@@ -70,6 +72,7 @@ override fun onBind(intent: Intent?): IBinder? = null
 override fun onCreate() {
 super.onCreate()
 windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+mira = MiraManager(this, windowManager)
 showBubble()
 }
 private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -181,36 +184,20 @@ private fun runFunction(label: String) {
 val newState = !(toggleStates[label] ?: false)
 toggleStates[label] = newState
 if (label == "Crosshair Assistant") {
-toggleCrosshair(newState)
+mira?.setVisible(newState)
 return
 }
 Thread {
 when (label) {
-"Liberar RAM" -> ShizukuHelper.freeRam()
+"Girar pantalla" -> ShizukuHelper.rotateScreen(newState, if (curRotation() == 1) 3 else 1)
 "Limpiador de RAM" -> ShizukuHelper.cleanRam()
 "Alto rend." -> ShizukuHelper.highPerformance(newState)
 "Bloq. notif." -> ShizukuHelper.blockNotifications(newState)
 }
 }.start()
 }
-private fun toggleCrosshair(on: Boolean) {
-if (on && crosshairView == null) {
-val v = CrosshairView(this, resources.displayMetrics.density)
-val size = dp(48)
-val p = WindowManager.LayoutParams(
-size, size,
-WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-PixelFormat.TRANSLUCENT
-)
-p.gravity = Gravity.CENTER
-crosshairView = v
-windowManager.addView(v, p)
-} else if (!on) {
-crosshairView?.let { windowManager.removeView(it) }
-crosshairView = null
-}
-}
+@Suppress("DEPRECATION")
+private fun curRotation(): Int = windowManager.defaultDisplay.rotation
 private fun circleBg(active: Boolean, s: Float): GradientDrawable =
 GradientDrawable().apply {
 shape = GradientDrawable.OVAL
@@ -262,6 +249,16 @@ icon.setColorFilter(if (active) tealInt else grayText)
 }
 if (label.endsWith("RAM")) {
 handler.postDelayed({ refreshStats() }, 1500)
+}
+}
+if (label == "Crosshair Assistant") {
+item.setOnLongClickListener {
+toggleStates[label] = true
+circle.background = circleBg(true, s)
+icon.setColorFilter(tealInt)
+if (panelVisible) togglePanel()
+mira?.showMenu()
+true
 }
 }
 return item
@@ -351,7 +348,7 @@ val stats = StatsView(this, s, tealInt, grayText)
 statsView = stats
 root.addView(stats, place(s, 440f, 64f, 400f, 156f))
 val leftItems = listOf(
-R.drawable.ic_ram to "Liberar RAM",
+-3 to "Girar pantalla",
 R.drawable.ic_cpu to "Alto rend.",
 -1 to "Crosshair Assistant",
 R.drawable.ic_bell_off to "Bloq. notif."
@@ -381,12 +378,7 @@ Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
 } catch (e: Exception) {
 128
 }
-val brightness = buildSlider("☀", true, 255, curBright, s) { v ->
-try {
-Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, v)
-} catch (e: Exception) {
-}
-}
+val brightness = buildSlider("☀", true, 255, curBright, s) { v -> ShizukuHelper.setBrightness(v) }
 root.addView(brightness, place(s, 20f, 312f, 330f, 46f))
 val volume = buildSlider("🔊", false, maxVol, curVol, s) { v ->
 try {
@@ -421,7 +413,7 @@ override fun onDestroy() {
 super.onDestroy()
 handler.removeCallbacks(statsRunnable)
 ShizukuHelper.stopStats()
-crosshairView?.let { windowManager.removeView(it) }
+mira?.destroy()
 bubbleView?.let { windowManager.removeView(it) }
 if (panelVisible) panelView?.let { windowManager.removeView(it) }
 }
@@ -590,22 +582,6 @@ canvas.drawText("CPU", 303f, 100f, labelPaint)
 canvas.restore()
 }
 }
-class CrosshairView(context: Context, private val d: Float) : View(context) {
-private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = AColor.parseColor("#FF1744")
-strokeWidth = 2f * d
-strokeCap = Paint.Cap.ROUND
-}
-override fun onDraw(canvas: Canvas) {
-val cx = width / 2f
-val cy = height / 2f
-canvas.drawLine(cx, cy - 20f * d, cx, cy - 6f * d, paint)
-canvas.drawLine(cx, cy + 6f * d, cx, cy + 20f * d, paint)
-canvas.drawLine(cx - 20f * d, cy, cx - 6f * d, cy, paint)
-canvas.drawLine(cx + 6f * d, cy, cx + 20f * d, cy, paint)
-canvas.drawCircle(cx, cy, 1.5f * d, paint)
-}
-}
 class IconDrawable(private val kind: Int) : Drawable() {
 private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
 color = AColor.WHITE
@@ -617,7 +593,11 @@ c.save()
 c.translate(bounds.left.toFloat(), bounds.top.toFloat())
 c.scale(bounds.width() / 24f, bounds.height() / 24f)
 p.style = Paint.Style.STROKE
-if (kind == 1) {
+if (kind == 3) {
+c.drawArc(RectF(4f, 4f, 20f, 20f), 200f, 280f, false, p)
+c.drawLine(8f, 18.9f, 9.4f, 22.7f, p)
+c.drawLine(8f, 18.9f, 11.9f, 18.2f, p)
+} else if (kind == 1) {
 c.drawCircle(12f, 12f, 6f, p)
 c.drawLine(12f, 2f, 12f, 8f, p)
 c.drawLine(12f, 16f, 12f, 22f, p)
