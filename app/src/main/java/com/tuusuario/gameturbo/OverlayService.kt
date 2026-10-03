@@ -267,15 +267,19 @@ class OverlayService : Service() {
       this.max = maxValue
       this.progress = startValue
       val th = dp(BAR_WIDTH_DP)
+      val ts = (22f * s).toInt()
+      val inset = ((ts - th) / 2).coerceAtLeast(0)
       val trackBg = GradientDrawable().apply {
-        setColor(0x801DE9B6.toInt()); cornerRadius = th / 2f; setSize(0, th)
+        setColor(0x801DE9B6.toInt()); cornerRadius = th / 2f
       }
       val trackFg = GradientDrawable().apply {
-        setColor(tealInt); cornerRadius = th / 2f; setSize(0, th)
+        setColor(tealInt); cornerRadius = th / 2f
       }
       progressDrawable = LayerDrawable(arrayOf(trackBg, ClipDrawable(trackFg, Gravity.START, ClipDrawable.HORIZONTAL))).apply {
         setId(0, android.R.id.background)
         setId(1, android.R.id.progress)
+        setLayerInset(0, 0, inset, 0, inset)
+        setLayerInset(1, 0, inset, 0, inset)
       }
       thumb = DiamondDrawable((22f * s).toInt(), tealInt)
       setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -286,7 +290,7 @@ class OverlayService : Service() {
         override fun onStopTrackingTouch(sb: SeekBar?) {}
       })
     }
-    val barLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    val barLp = LinearLayout.LayoutParams(0, (22f * s).toInt(), 1f)
     val symLp = LinearLayout.LayoutParams(
       LinearLayout.LayoutParams.WRAP_CONTENT,
       LinearLayout.LayoutParams.WRAP_CONTENT
