@@ -62,22 +62,48 @@ object ShizukuHelper {
         runCommand("am kill-all")
     }
 
-    fun highPerformance(enable: Boolean) {
+    private fun brief(out: String): String =
+        out.trim().lines().firstOrNull { it.isNotBlank() }?.take(70) ?: "Listo"
+
+    fun highPerformance(enable: Boolean): String {
+        val game = foregroundPackage() ?: knownGames[0]
+        val mode = if (enable) "performance" else "standard"
         val governor = if (enable) "performance" else "schedutil"
+        val a = runCommand("cmd power set-fixed-performance-mode-enabled $enable")
+        val b = runCommand("cmd game set --mode $mode $game || cmd game mode $mode $game")
+        runCommand("settings put global low_power 0")
         runCommand("for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $governor > \$cpu; done")
+        return brief(if (a.isNotBlank()) a else b)
     }
 
     fun blockCalls(enable: Boolean) {
         runCommand("cmd notification set_dnd ${if (enable) "alarms" else "off"}")
     }
 
-    fun blockNotifications(enable: Boolean) {
-        runCommand("cmd notification set_dnd ${if (enable) "alarms" else "off"}")
+    fun blockNotifications(enable: Boolean): String {
+        return brief(runCommand("cmd notification set_dnd ${if (enable) "alarms" else "off"}"))
     }
 
-    fun cleanRam() {
+    // Cierra todas las apps de terceros menos el juego, el teclado, el launcher, esta app y Shizuku
+    fun cleanRam(): String {
+        val keep = mutableSetOf("com.tuusuario.gameturbo", "moe.shizuku.privileged.api")
+        keep.addAll(knownGames)
+        foregroundPackage()?.let { keep.add(it) }
+        val ime = runCommand("settings get secure default_input_method").trim().substringBefore("/")
+        if (ime.isNotEmpty() && ime != "null") keep.add(ime)
+        val home = runCommand("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME")
+            .trim().lines().lastOrNull()?.trim()?.substringBefore("/") ?: ""
+        if (home.isNotEmpty()) keep.add(home)
+        val pkgs = runCommand("pm list packages -3")
+            .lines()
+            .map { it.trim().removePrefix("package:") }
+            .filter { it.isNotEmpty() && it !in keep }
+        if (pkgs.isNotEmpty()) {
+            runCommand(pkgs.joinToString("; ") { "am force-stop $it" })
+        }
         runCommand("am kill-all")
         runCommand("pm trim-caches 999G")
+        return "${pkgs.size} apps cerradas"
     }
 
     private val lock = Any()
