@@ -15,18 +15,22 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
+import android.util.DisplayMetrics
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.GridLayout
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.TextClock
 import android.widget.TextView
 
 class OverlayService : Service() {
@@ -38,11 +42,15 @@ class OverlayService : Service() {
 
     // ---- Colores (tema verde/teal) ----
     private val tealInt = AColor.parseColor("#1DE9B6")
-    private val panelBg = AColor.parseColor("#E60F1A18")
+    private val panelBg = AColor.parseColor("#D90B1412")
     private val grayText = AColor.parseColor("#CFD8DC")
 
-    // Columnas de cada grupo de iconos (2 = cuadro 2x2, 4 = una sola fila, mas delgado)
-    private val GRID_COLS = 2
+    // Grosor de la barra lateral en dp (más chico = más delgada) y su alto en cm
+    private val BAR_WIDTH_DP = 4
+    private val BAR_HEIGHT_CM = 2f
+
+    // Ancho del panel respecto a la pantalla (0.8 = 80%). Bájalo si lo quieres más chico.
+    private val HUD_WIDTH_FRACTION = 0.8f
 
     // Funciones que se quedan "encendidas" (se resaltan en verde)
     private val toggleLabels = setOf(
@@ -62,7 +70,7 @@ class OverlayService : Service() {
         "Sin vibración" to false
     )
 
-    // Valores del medidor central. FPS y CPU se conectan despues con Shizuku.
+    // Valores del medidor central. FPS y CPU se conectan después con Shizuku.
     private var currentFps = "--"
     private var currentCpu = "--"
 
@@ -90,6 +98,18 @@ class OverlayService : Service() {
         return (cm * (160f / 2.54f) * density).toInt()
     }
 
+    @Suppress("DEPRECATION")
+    private fun screenSize(): Pair<Int, Int> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val b = windowManager.currentWindowMetrics.bounds
+            Pair(b.width(), b.height())
+        } else {
+            val dm = DisplayMetrics()
+            windowManager.defaultDisplay.getRealMetrics(dm)
+            Pair(dm.widthPixels, dm.heightPixels)
+        }
+    }
+
     private fun getRamUsagePercent(): Int {
         val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val info = ActivityManager.MemoryInfo()
@@ -108,25 +128,34 @@ class OverlayService : Service() {
     }
 
     // ------------------------------------------------------------------
-    // Burbuja (cuadrito de 1cm)
+    // Barra lateral delgada pegada al borde izquierdo
     // ------------------------------------------------------------------
     private fun showBubble() {
-        val sizePx = cmToPx(1f)
+        val touchW = dp(22)          // zona táctil (más ancha para poder tocarla)
+        val barW = dp(BAR_WIDTH_DP)  // barra visible, delgada
+        val barH = cmToPx(BAR_HEIGHT_CM)
 
-        val bubble = TextView(this).apply {
-            text = "⚡"
-            textSize = 14f
-            setTextColor(AColor.WHITE)
-            gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
+        val container = FrameLayout(this)
+
+        val bar = View(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0x001DE9B6, tealInt, tealInt, 0x001DE9B6)
+            ).apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadii = floatArrayOf(0f, 0f, 20f, 20f, 20f, 20f, 0f, 0f)
-                setColor(tealInt)
+                val r = dp(3).toFloat()
+                cornerRadii = floatArrayOf(0f, 0f, r, r, r, r, 0f, 0f)
             }
         }
+        container.addView(
+            bar,
+            FrameLayout.LayoutParams(barW, FrameLayout.LayoutParams.MATCH_PARENT).apply {
+                gravity = Gravity.START
+            }
+        )
 
         val params = WindowManager.LayoutParams(
-            sizePx, sizePx,
+            touchW, barH,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
@@ -135,29 +164,23 @@ class OverlayService : Service() {
         params.x = 0
         params.y = 300
 
-        var initialX = 0
         var initialY = 0
-        var touchX = 0f
         var touchY = 0f
         var moved = false
 
-        bubble.setOnTouchListener { _, event ->
+        container.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    initialX = params.x
                     initialY = params.y
-                    touchX = event.rawX
                     touchY = event.rawY
                     moved = false
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - touchX
                     val dy = event.rawY - touchY
-                    if (kotlin.math.abs(dx) > 10 || kotlin.math.abs(dy) > 10) {
-                        params.x = initialX + dx.toInt()
-                        params.y = initialY + dy.toInt()
-                        windowManager.updateViewLayout(bubble, params)
+                    if (kotlin.math.abs(dy) > 10) {
+                        params.y = initialY + dy.toInt()   // solo se mueve hacia arriba/abajo
+                        windowManager.updateViewLayout(container, params)
                         moved = true
                     }
                     true
@@ -170,8 +193,8 @@ class OverlayService : Service() {
             }
         }
 
-        bubbleView = bubble
-        windowManager.addView(bubble, params)
+        bubbleView = container
+        windowManager.addView(container, params)
     }
 
     private fun togglePanel() {
@@ -188,7 +211,7 @@ class OverlayService : Service() {
     }
 
     // ------------------------------------------------------------------
-    // Logica de funciones (sin cambios)
+    // Lógica de funciones (sin cambios)
     // ------------------------------------------------------------------
     private fun runFunction(label: String) {
         val newState = !(toggleStates[label] ?: false)
@@ -205,14 +228,10 @@ class OverlayService : Service() {
     }
 
     // ------------------------------------------------------------------
-    // Fondo con esquinas cortadas (como la referencia)
+    // Marco completo del HUD (mismo contorno que la referencia)
+    // Se dibuja en una cuadrícula de diseño de 1280 x 300 y se escala.
     // ------------------------------------------------------------------
-    private class ChamferDrawable(
-        fillColor: Int,
-        strokeColor: Int,
-        private val cut: Float,
-        private val strokeW: Float
-    ) : Drawable() {
+    private class HudDrawable(fillColor: Int, strokeColor: Int) : Drawable() {
         private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = fillColor
             style = Paint.Style.FILL
@@ -220,28 +239,48 @@ class OverlayService : Service() {
         private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = strokeColor
             style = Paint.Style.STROKE
-            strokeWidth = strokeW
+            strokeWidth = 3f
+            strokeJoin = Paint.Join.ROUND
         }
-        private val path = Path()
+        private val path = Path().apply {
+            // arriba: panel izquierdo -> puente -> panel derecho
+            moveTo(45f, 0f)
+            lineTo(260f, 0f)
+            lineTo(385f, 30f)
+            lineTo(895f, 30f)
+            lineTo(1020f, 0f)
+            lineTo(1235f, 0f)
+            lineTo(1280f, 45f)
+            // lado derecho
+            lineTo(1280f, 255f)
+            lineTo(1235f, 300f)
+            // abajo: panel derecho -> puente con pestaña central -> panel izquierdo
+            lineTo(1020f, 300f)
+            lineTo(895f, 270f)
+            lineTo(740f, 270f)
+            lineTo(715f, 300f)
+            lineTo(565f, 300f)
+            lineTo(540f, 270f)
+            lineTo(385f, 270f)
+            lineTo(260f, 300f)
+            lineTo(45f, 300f)
+            lineTo(0f, 255f)
+            // lado izquierdo
+            lineTo(0f, 45f)
+            close()
+        }
 
         override fun draw(canvas: Canvas) {
-            val half = strokeW / 2f
-            val l = bounds.left + half
-            val t = bounds.top + half
-            val r = bounds.right - half
-            val b = bounds.bottom - half
-            path.reset()
-            path.moveTo(l + cut, t)
-            path.lineTo(r - cut, t)
-            path.lineTo(r, t + cut)
-            path.lineTo(r, b - cut)
-            path.lineTo(r - cut, b)
-            path.lineTo(l + cut, b)
-            path.lineTo(l, b - cut)
-            path.lineTo(l, t + cut)
-            path.close()
+            val unit = bounds.width() / 1280f
+            val pad = 2f * unit
+            val sw = (bounds.width() - 2 * pad) / 1280f
+            val sh = (bounds.height() - 2 * pad) / 300f
+            canvas.save()
+            canvas.translate(bounds.left + pad, bounds.top + pad)
+            canvas.scale(sw, sh)
             canvas.drawPath(path, fillPaint)
             canvas.drawPath(path, strokePaint)
+            canvas.restore()
         }
 
         override fun setAlpha(alpha: Int) {
@@ -258,20 +297,59 @@ class OverlayService : Service() {
         override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
     }
 
+    // Perilla en forma de rombo para los sliders
+    private class DiamondDrawable(private val size: Int, color: Int) : Drawable() {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            style = Paint.Style.FILL
+        }
+        private val path = Path()
+
+        override fun draw(canvas: Canvas) {
+            val cx = bounds.exactCenterX()
+            val cy = bounds.exactCenterY()
+            val r = size / 2f
+            path.reset()
+            path.moveTo(cx, cy - r)
+            path.lineTo(cx + r, cy)
+            path.lineTo(cx, cy + r)
+            path.lineTo(cx - r, cy)
+            path.close()
+            canvas.drawPath(path, paint)
+        }
+
+        override fun getIntrinsicWidth(): Int = size
+        override fun getIntrinsicHeight(): Int = size
+
+        override fun setAlpha(alpha: Int) {
+            paint.alpha = alpha
+        }
+
+        override fun setColorFilter(colorFilter: ColorFilter?) {
+            paint.colorFilter = colorFilter
+        }
+
+        @Suppress("OVERRIDE_DEPRECATION")
+        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+    }
+
     // ------------------------------------------------------------------
-    // Medidor central: RAM / FPS / CPU
+    // Medidor central: RAM / FPS / CPU con barras curvas a los lados
+    // Cuadrícula de diseño local: 400 x 156
     // ------------------------------------------------------------------
-    private inner class StatsView(context: Context) : View(context) {
+    private inner class StatsView(context: Context, private val s: Float) : View(context) {
         var ram = 0
         var fps = "--"
         var cpu = "--"
 
-        private val d = resources.displayMetrics.density
-
+        private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AColor.parseColor("#55000000")
+            style = Paint.Style.FILL
+        }
         private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AColor.parseColor("#661DE9B6")
+            color = AColor.parseColor("#991DE9B6")
             style = Paint.Style.STROKE
-            strokeWidth = 2f * d
+            strokeWidth = 2f
         }
         private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = tealInt
@@ -279,119 +357,129 @@ class OverlayService : Service() {
         }
         private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = tealInt
-            textSize = 22f * d
+            textSize = 32f
             typeface = Typeface.DEFAULT_BOLD
             textAlign = Paint.Align.CENTER
         }
         private val fpsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = AColor.WHITE
-            textSize = 30f * d
+            textSize = 56f
             typeface = Typeface.DEFAULT_BOLD
             textAlign = Paint.Align.CENTER
         }
         private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = grayText
-            textSize = 11f * d
+            textSize = 20f
             textAlign = Paint.Align.CENTER
+        }
+        private val shape = Path().apply {
+            moveTo(60f, 12f)
+            lineTo(340f, 12f)
+            lineTo(360f, 32f)
+            lineTo(360f, 128f)
+            lineTo(340f, 148f)
+            lineTo(60f, 148f)
+            lineTo(40f, 128f)
+            lineTo(40f, 32f)
+            close()
         }
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            val w = width.toFloat()
-            val h = height.toFloat()
+            canvas.save()
+            canvas.scale(s, s)
 
-            // marco redondeado
-            canvas.drawRoundRect(
-                2f * d, 6f * d, w - 2f * d, h - 6f * d,
-                16f * d, 16f * d, framePaint
-            )
+            // forma interior con esquinas cortadas
+            canvas.drawPath(shape, fillPaint)
+            canvas.drawPath(shape, framePaint)
 
-            // barritas laterales (5 por lado, se llenan segun la RAM)
-            val filled = ((ram / 100f) * 5f).toInt().coerceIn(0, 5)
-            val barW = 6f * d
-            val barH = 10f * d
-            val gap = 4f * d
-            val totalH = 5 * barH + 4 * gap
-            val startY = (h - totalH) / 2f
-            for (i in 0 until 5) {
-                val top = startY + (4 - i) * (barH + gap)
-                barPaint.alpha = if (i < filled) 255 else 60
-                canvas.drawRoundRect(0f, top, barW, top + barH, 3f * d, 3f * d, barPaint)
-                canvas.drawRoundRect(w - barW, top, w, top + barH, 3f * d, 3f * d, barPaint)
+            // barras curvas: izquierda = RAM, derecha = CPU
+            val filledL = (ram * 7 / 100).coerceIn(0, 7)
+            val cpuVal = cpu.toIntOrNull()
+            val filledR = if (cpuVal != null) (cpuVal * 7 / 100).coerceIn(0, 7) else 0
+            for (i in 0 until 7) {
+                val t = (i - 3) / 3f
+                val off = 12f * t * t
+                val y = 8f + i * 20f
+                val level = 6 - i                       // 0 = segmento de abajo
+
+                barPaint.alpha = if (level < filledL) 255 else 70
+                canvas.drawRoundRect(6f + off, y, 6f + off + 22f, y + 14f, 4f, 4f, barPaint)
+
+                barPaint.alpha = if (level < filledR) 255 else 70
+                canvas.drawRoundRect(372f - off - 22f, y, 372f - off, y + 14f, 4f, 4f, barPaint)
             }
 
-            val c1 = w * 0.2f
-            val c2 = w * 0.5f
-            val c3 = w * 0.8f
-            val valueY = h * 0.55f
-            val labelY = h * 0.78f
+            // valores
+            canvas.drawText("$ram%", 97f, 78f, valuePaint)
+            canvas.drawText(fps, 200f, 84f, fpsPaint)
+            canvas.drawText(if (cpu == "--") cpu else "$cpu%", 303f, 78f, valuePaint)
 
-            canvas.drawText("$ram%", c1, valueY, valuePaint)
-            canvas.drawText(fps, c2, valueY + 3f * d, fpsPaint)
-            canvas.drawText(if (cpu == "--") cpu else "$cpu%", c3, valueY, valuePaint)
+            // etiquetas
+            canvas.drawText("RAM", 97f, 100f, labelPaint)
+            canvas.drawText("FPS", 200f, 110f, labelPaint)
+            canvas.drawText("CPU", 303f, 100f, labelPaint)
 
-            canvas.drawText("RAM", c1, labelY, labelPaint)
-            canvas.drawText("FPS", c2, labelY, labelPaint)
-            canvas.drawText("CPU", c3, labelY, labelPaint)
+            canvas.restore()
         }
     }
 
     // ------------------------------------------------------------------
-    // Item de funcion (circulo + icono + texto)
+    // Item de función (círculo + icono + texto)
     // ------------------------------------------------------------------
-    private fun circleBg(active: Boolean): GradientDrawable =
+    private fun circleBg(active: Boolean, s: Float): GradientDrawable =
         GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(if (active) AColor.parseColor("#331DE9B6") else AColor.parseColor("#22FFFFFF"))
             setStroke(
-                dp(2),
+                (3f * s).toInt().coerceAtLeast(1),
                 if (active) tealInt else AColor.parseColor("#66FFFFFF")
             )
         }
 
-    private fun buildItem(iconRes: Int, label: String): View {
+    private fun buildItem(iconRes: Int, label: String, s: Float): View {
         val canToggle = label in toggleLabels
         val startActive = canToggle && (toggleStates[label] == true)
+        val circleSize = (64f * s).toInt()
 
         val item = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            layoutParams = GridLayout.LayoutParams().apply {
-                width = dp(62)
-                height = dp(62)
-                setMargins(dp(2), dp(2), dp(2), dp(2))
-            }
         }
 
         val circle = LinearLayout(this).apply {
             gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(dp(32), dp(32))
-            background = circleBg(startActive)
+            background = circleBg(startActive, s)
         }
         val icon = ImageView(this).apply {
             setImageResource(iconRes)
             setColorFilter(if (startActive) tealInt else grayText)
-            layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
         }
-        circle.addView(icon)
+        val iconSize = (34f * s).toInt()
+        circle.addView(icon, LinearLayout.LayoutParams(iconSize, iconSize))
 
         val text = TextView(this).apply {
             this.text = label
-            textSize = 9f
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, 19f * s)
             setTextColor(grayText)
             gravity = Gravity.CENTER
             maxLines = 2
-            setPadding(0, dp(2), 0, 0)
         }
 
-        item.addView(circle)
-        item.addView(text)
+        item.addView(circle, LinearLayout.LayoutParams(circleSize, circleSize))
+        item.addView(
+            text,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (4f * s).toInt() }
+        )
 
         item.setOnClickListener {
             runFunction(label)
             if (canToggle) {
                 val active = toggleStates[label] == true
-                circle.background = circleBg(active)
+                circle.background = circleBg(active, s)
                 icon.setColorFilter(if (active) tealInt else grayText)
             }
             if (label == "Liberar RAM") {
@@ -401,168 +489,71 @@ class OverlayService : Service() {
         return item
     }
 
-    private fun buildGrid(items: List<Pair<Int, String>>): GridLayout {
-        val grid = GridLayout(this).apply {
-            columnCount = GRID_COLS
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
-        items.forEach { (iconRes, label) -> grid.addView(buildItem(iconRes, label)) }
-        return grid
-    }
-
     // ------------------------------------------------------------------
     // Sliders (brillo y volumen)
     // ------------------------------------------------------------------
     private fun buildSlider(
         symbol: String,
+        symbolFirst: Boolean,
         maxValue: Int,
         startValue: Int,
+        s: Float,
         onChange: (Int) -> Unit
     ): LinearLayout {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
-            ).apply { setMargins(dp(4), 0, dp(4), 0) }
         }
         val sym = TextView(this).apply {
             text = symbol
-            textSize = 14f
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, 26f * s)
             setTextColor(tealInt)
         }
         val bar = SeekBar(this).apply {
             this.max = maxValue
             this.progress = startValue
             progressTintList = ColorStateList.valueOf(tealInt)
-            thumbTintList = ColorStateList.valueOf(tealInt)
-            layoutParams = LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
-            )
+            progressBackgroundTintList = ColorStateList.valueOf(AColor.parseColor("#4D1DE9B6"))
+            thumb = DiamondDrawable((22f * s).toInt(), tealInt)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
                     if (fromUser) onChange(p)
                 }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
+                override fun onStartTrackingTouch(sb: SeekBar?) {}
+                override fun onStopTrackingTouch(sb: SeekBar?) {}
             })
         }
-        row.addView(sym)
-        row.addView(bar)
+        val barLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        val symLp = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        if (symbolFirst) {
+            row.addView(sym, symLp)
+            row.addView(bar, barLp)
+        } else {
+            row.addView(bar, barLp)
+            row.addView(sym, symLp)
+        }
         return row
     }
 
+    private fun place(s: Float, x: Float, y: Float, w: Float, h: Float): FrameLayout.LayoutParams =
+        FrameLayout.LayoutParams((w * s).toInt(), (h * s).toInt()).apply {
+            gravity = Gravity.TOP or Gravity.START
+            leftMargin = (x * s).toInt()
+            topMargin = (y * s).toInt()
+        }
+
     // ------------------------------------------------------------------
-    // Panel
+    // Panel completo
     // ------------------------------------------------------------------
     private fun showPanel() {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = ChamferDrawable(
-                panelBg, tealInt, dp(14).toFloat(), dp(2).toFloat()
-            )
-            setPadding(dp(16), dp(10), dp(16), dp(8))
-        }
+        val (sw, sh) = screenSize()
+        val panelW = if (sw > sh) (sw * HUD_WIDTH_FRACTION).toInt() else (sw * 0.96f).toInt()
+        val s = panelW / 1280f
 
-        // ---- Fila principal: izquierda | medidor | derecha ----
-        val mainRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
+        val root = FrameLayout(this)
 
-        val leftGrid = buildGrid(
-            listOf(
-                R.drawable.ic_ram to "Liberar RAM",
-                R.drawable.ic_cpu to "Alto rend.",
-                R.drawable.ic_call_off to "Bloq. llamadas",
-                R.drawable.ic_bell_off to "Bloq. notif."
-            )
-        )
-
-        val stats = StatsView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(200), dp(84)).apply {
-                setMargins(dp(8), 0, dp(8), 0)
-            }
-        }
-        statsView = stats
-
-        val rightGrid = buildGrid(
-            listOf(
-                R.drawable.ic_vibrate_off to "Sin vibración",
-                R.drawable.ic_gesture_off to "Bloq. gestos",
-                R.drawable.ic_chart to "Info real",
-                R.drawable.ic_record to "Grabar"
-            )
-        )
-
-        mainRow.addView(leftGrid)
-        mainRow.addView(stats)
-        mainRow.addView(rightGrid)
-        root.addView(mainRow)
-
-        // ---- Fila de abajo: brillo | volumen | cerrar ----
-        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val maxVol = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val curVol = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
-        val curBright = try {
-            Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
-        } catch (e: Exception) {
-            128
-        }
-
-        val sliders = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(4), 0, 0)
-        }
-
-        sliders.addView(buildSlider("☀", 255, curBright) { v ->
-            // Necesita el permiso "Modificar ajustes del sistema"; si no lo tiene, no hace nada
-            try {
-                Settings.System.putInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, v)
-            } catch (e: Exception) {
-            }
-        })
-
-        sliders.addView(buildSlider("🔊", maxVol, curVol) { v ->
-            try {
-                audio.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0)
-            } catch (e: Exception) {
-            }
-        })
-
-        val closeBtn = TextView(this).apply {
-            text = "✕"
-            textSize = 16f
-            setTextColor(tealInt)
-            setPadding(dp(10), dp(4), dp(4), dp(4))
-            setOnClickListener { togglePanel() }
-        }
-        sliders.addView(closeBtn)
-        root.addView(sliders)
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        params.x = 0
-        params.y = dp(4)
-
-        panelView = root
-        windowManager.addView(root, params)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        handler.removeCallbacks(statsRunnable)
-        bubbleView?.let { windowManager.removeView(it) }
-        if (panelVisible) panelView?.let { windowManager.removeView(it) }
-    }
-}
+        // 1) Marco con todas las curvas
+        val frame = View(this).apply { background = HudDrawable(pa
