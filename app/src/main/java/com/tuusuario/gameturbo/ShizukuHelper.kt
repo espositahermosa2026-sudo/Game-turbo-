@@ -68,13 +68,16 @@ object ShizukuHelper {
     }
 
     fun blockCalls(enable: Boolean) {
-        val mode = if (enable) 3 else 0
-        runCommand("cmd notification set_dnd $mode")
+        runCommand("cmd notification set_dnd ${if (enable) "alarms" else "off"}")
     }
 
     fun blockNotifications(enable: Boolean) {
-        val mode = if (enable) 3 else 0
-        runCommand("cmd notification set_dnd $mode")
+        runCommand("cmd notification set_dnd ${if (enable) "alarms" else "off"}")
+    }
+
+    fun cleanRam() {
+        runCommand("am kill-all")
+        runCommand("pm trim-caches 999G")
     }
 
     fun toggleVibration(enable: Boolean) {
