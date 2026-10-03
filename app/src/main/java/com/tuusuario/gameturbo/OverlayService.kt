@@ -3,6 +3,7 @@ import android.app.ActivityManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.Canvas
 import android.graphics.Color as AColor
 import android.graphics.ColorFilter
@@ -33,12 +34,14 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextClock
 import android.widget.TextView
+import android.widget.Toast
 class OverlayService : Service() {
 private lateinit var windowManager: WindowManager
 private var bubbleView: View? = null
 private var panelView: View? = null
 private var panelVisible = false
 private var mira: MiraManager? = null
+private var rotView: View? = null
 private val tealInt = AColor.parseColor("#1DE9B6")
 private val panelBg = AColor.parseColor("#D90B1412")
 private val grayText = AColor.parseColor("#CFD8DC")
@@ -187,14 +190,37 @@ if (label == "Crosshair Assistant") {
 mira?.setVisible(newState)
 return
 }
+if (label == "Girar pantalla") {
+setRotation(newState)
+return
+}
 Thread {
-when (label) {
-"Girar pantalla" -> ShizukuHelper.rotateScreen(newState, if (curRotation() == 1) 3 else 1)
+val msg: String? = when (label) {
 "Limpiador de RAM" -> ShizukuHelper.cleanRam()
 "Alto rend." -> ShizukuHelper.highPerformance(newState)
 "Bloq. notif." -> ShizukuHelper.blockNotifications(newState)
+else -> null
 }
+if (msg != null) handler.post { Toast.makeText(this, label + ": " + msg, Toast.LENGTH_SHORT).show() }
 }.start()
+}
+private fun setRotation(on: Boolean) {
+if (on && rotView == null) {
+val v = View(this)
+val p = WindowManager.LayoutParams(
+1, 1,
+WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+PixelFormat.TRANSLUCENT
+)
+p.gravity = Gravity.TOP or Gravity.START
+p.screenOrientation = if (curRotation() == 1) ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+rotView = v
+windowManager.addView(v, p)
+} else if (!on) {
+rotView?.let { windowManager.removeView(it) }
+rotView = null
+}
 }
 @Suppress("DEPRECATION")
 private fun curRotation(): Int = windowManager.defaultDisplay.rotation
@@ -414,6 +440,7 @@ super.onDestroy()
 handler.removeCallbacks(statsRunnable)
 ShizukuHelper.stopStats()
 mira?.destroy()
+rotView?.let { windowManager.removeView(it) }
 bubbleView?.let { windowManager.removeView(it) }
 if (panelVisible) panelView?.let { windowManager.removeView(it) }
 }
