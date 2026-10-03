@@ -85,18 +85,19 @@ object ShizukuHelper {
 
     // ---- Medición de CPU y FPS ----
 
+    private val knownGames = listOf("com.dts.freefiremax", "com.dts.freefireth")
+
     fun startStats() {
         if (running) return
         running = true
         val gen = ++generation
         lastTotal = 0L
-        lastFind = 0L
-        layerName = null
         Thread {
             while (running && gen == generation) {
                 if (isReady()) {
                     try { cpu = readCpu() } catch (e: Exception) { cpu = "--" }
                     try { fps = readFps() } catch (e: Exception) { fps = "--" }
+                    try { maybeFindLayer() } catch (e: Exception) { }
                 }
                 Thread.sleep(1000)
             }
@@ -127,12 +128,16 @@ object ShizukuHelper {
         return result
     }
 
-    private fun latencyTimes(layer: String): List<Long> {
-        val out = runCommand("dumpsys SurfaceFlinger --latency '$layer'")
-        return out.trim().split("\n").drop(1).mapNotNull { line ->
+    private fun parseTimes(lines: List<String>): List<Long> {
+        return lines.mapNotNull { line ->
             val c = line.trim().split(Regex("\\s+"))
             if (c.size >= 3) c[1].toLongOrNull() else null
         }.filter { it > 0L && it < Long.MAX_VALUE }
+    }
+
+    private fun latencyTimes(layer: String): List<Long> {
+        val out = runCommand("dumpsys SurfaceFlinger --latency '$layer'")
+        return parseTimes(out.trim().split("\n").drop(1))
     }
 
     private fun foregroundPackage(): String? {
@@ -152,17 +157,29 @@ object ShizukuHelper {
         return ((window.size - 1) * 1_000_000_000.0 / span).toInt().coerceIn(0, 240)
     }
 
-    // Revisa todas las capas del juego y se queda con la que dibuja más cuadros por segundo
+    // Busca la capa del juego que dibuja más cuadros por segundo (solo 2 comandos en total)
     private fun findBestLayer(): String? {
-        val pkg = foregroundPackage() ?: return null
-        val cands = runCommand("dumpsys SurfaceFlinger --list")
+        val all = runCommand("dumpsys SurfaceFlinger --list")
             .split("\n")
             .map { it.trim() }
             .filter {
-                it.contains(pkg) && !it.contains("'") &&
+                it.isNotEmpty() && !it.contains("'") &&
                     !it.startsWith("Background for") && !it.startsWith("Bounds for")
             }
-        val data = cands.map { it to latencyTimes(it) }.filter { it.second.size >= 5 }
+        var cands = all.filter { l -> knownGames.any { l.contains(it) } }
+        if (cands.isEmpty()) {
+            val pkg = foregroundPackage() ?: return null
+            cands = all.filter { it.contains(pkg) }
+        }
+        if (cands.isEmpty()) return null
+        val cmd = cands.joinToString("; ") {
+            "echo '@@" + it + "'; dumpsys SurfaceFlinger --latency '" + it + "'"
+        }
+        val data = runCommand(cmd).split("@@").drop(1).mapNotNull { block ->
+            val lines = block.split("\n")
+            val times = parseTimes(lines.drop(2))
+            if (times.size >= 5) lines[0].trim() to times else null
+        }
         if (data.isEmpty()) return null
         val newestAll = data.maxOf { it.second.maxOrNull() ?: 0L }
         var best: String? = null
@@ -179,16 +196,21 @@ object ShizukuHelper {
         return best
     }
 
-    private fun readFps(): String {
+    private fun maybeFindLayer() {
         val now = System.currentTimeMillis()
-        if ((layerName == null || now - lastFind > 5000L) && now - lastFind > 2000L) {
+        val due = if (layerName == null) now - lastFind > 2000L else now - lastFind > 15000L
+        if (due) {
             lastFind = now
-            layerName = findBestLayer()
+            findBestLayer()?.let { layerName = it }
         }
+    }
+
+    private fun readFps(): String {
         val name = layerName ?: return "--"
         val f = fpsOf(latencyTimes(name))
         if (f == null) {
             layerName = null
+            lastFind = 0L
             return "--"
         }
         return f.toString()
