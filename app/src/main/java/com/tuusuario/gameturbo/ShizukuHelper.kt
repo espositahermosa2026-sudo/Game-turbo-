@@ -68,9 +68,10 @@ object ShizukuHelper {
     fun highPerformance(enable: Boolean): String {
         val game = foregroundPackage() ?: knownGames[0]
         val mode = if (enable) "performance" else "standard"
+        val n = if (enable) 2 else 1
         val governor = if (enable) "performance" else "schedutil"
         val a = runCommand("cmd power set-fixed-performance-mode-enabled $enable")
-        val b = runCommand("cmd game set --mode $mode $game || cmd game mode $mode $game")
+        val b = runCommand("cmd game mode $n $game || cmd game set --mode $mode $game")
         runCommand("settings put global low_power 0")
         runCommand("for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $governor > \$cpu; done")
         return brief(if (a.isNotBlank()) a else b)
