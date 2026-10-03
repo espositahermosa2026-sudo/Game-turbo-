@@ -56,13 +56,7 @@ private val toggleLabels = setOf(
 "Bloq. gestos",
 "Info real"
 )
-private val toggleStates = mutableMapOf(
-"Liberar RAM" to false,
-"Alto rend." to false,
-"Bloq. llamadas" to false,
-"Bloq. notif." to false,
-"Sin vibración" to false
-)
+private val toggleStates = mutableMapOf<String, Boolean>()
 private val handler = Handler(Looper.getMainLooper())
 private var statsView: StatsView? = null
 private val statsRunnable = object : Runnable {
@@ -184,7 +178,7 @@ ShizukuHelper.startStats()
 handler.post(statsRunnable)
 }
 }
-private fun runFunction(label: String) {
+private fun runFunction(label: String, done: () -> Unit = {}) {
 val newState = !(toggleStates[label] ?: false)
 toggleStates[label] = newState
 if (label == "Crosshair Assistant") {
@@ -203,7 +197,10 @@ val msg: String? = when (label) {
 "Bloq. notif." -> ShizukuHelper.blockNotifications(newState)
 else -> null
 }
-if (msg != null) handler.post { msgView?.text = label + ": " + msg }
+if (msg != null) handler.post {
+msgView?.text = label + ": " + msg
+done()
+}
 }.start()
 }
 private fun setRotation(on: Boolean) {
@@ -269,11 +266,19 @@ LinearLayout.LayoutParams.WRAP_CONTENT
 ).apply { topMargin = (4f * s).toInt() }
 )
 item.setOnClickListener {
-runFunction(label)
+runFunction(label) {
+if (label == "Limpiador de RAM") handler.postDelayed({
+circle.background = circleBg(false, s)
+icon.setColorFilter(grayText)
+}, 1500)
+}
 if (canToggle) {
 val active = toggleStates[label] == true
 circle.background = circleBg(active, s)
 icon.setColorFilter(if (active) tealInt else grayText)
+} else if (label == "Limpiador de RAM") {
+circle.background = circleBg(true, s)
+icon.setColorFilter(tealInt)
 }
 if (label.endsWith("RAM")) {
 handler.postDelayed({ refreshStats() }, 1500)
