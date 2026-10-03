@@ -80,6 +80,37 @@ object ShizukuHelper {
         runCommand("pm trim-caches 999G")
     }
 
+    private val lock = Any()
+    private var pendingBright = -1
+    private var brightBusy = false
+
+    fun setBrightness(v: Int) {
+        synchronized(lock) {
+            pendingBright = v
+            if (brightBusy) return
+            brightBusy = true
+        }
+        Thread {
+            while (true) {
+                val b = synchronized(lock) {
+                    val x = pendingBright
+                    if (x < 0) brightBusy = false else pendingBright = -1
+                    x
+                }
+                if (b < 0) return@Thread
+                runCommand("settings put system screen_brightness_mode 0; settings put system screen_brightness $b")
+            }
+        }.start()
+    }
+
+    fun rotateScreen(enable: Boolean, rotation: Int) {
+        if (enable) {
+            runCommand("cmd window user-rotation lock $rotation || wm set-user-rotation lock $rotation")
+        } else {
+            runCommand("cmd window user-rotation free || wm set-user-rotation free")
+        }
+    }
+
     fun toggleVibration(enable: Boolean) {
         val mode = if (enable) 0 else 2
         runCommand("settings put system vibrate_when_ringing $mode")
