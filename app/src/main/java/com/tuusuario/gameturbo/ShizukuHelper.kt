@@ -142,7 +142,18 @@ object ShizukuHelper {
         return Regex("""u\d+ ([A-Za-z0-9_.]+)/""").find(out)?.groupValues?.get(1)
     }
 
-    private fun findLayer(): String? {
+    private fun fpsOf(times: List<Long>): Int? {
+        if (times.size < 2) return null
+        val newest = times.maxOrNull() ?: return null
+        val window = times.filter { it > newest - 1_000_000_000L }
+        val oldest = window.minOrNull() ?: return null
+        val span = newest - oldest
+        if (window.size < 2 || span <= 0L) return null
+        return ((window.size - 1) * 1_000_000_000.0 / span).toInt().coerceIn(0, 240)
+    }
+
+    // Revisa todas las capas del juego y se queda con la que dibuja más cuadros por segundo
+    private fun findBestLayer(): String? {
         val pkg = foregroundPackage() ?: return null
         val cands = runCommand("dumpsys SurfaceFlinger --list")
             .split("\n")
@@ -151,27 +162,35 @@ object ShizukuHelper {
                 it.contains(pkg) && !it.contains("'") &&
                     !it.startsWith("Background for") && !it.startsWith("Bounds for")
             }
-            .sortedBy { if (it.contains("SurfaceView")) 0 else 1 }
-        return cands.firstOrNull { latencyTimes(it).size >= 5 }
+        val data = cands.map { it to latencyTimes(it) }.filter { it.second.size >= 5 }
+        if (data.isEmpty()) return null
+        val newestAll = data.maxOf { it.second.maxOrNull() ?: 0L }
+        var best: String? = null
+        var bestFps = -1
+        for ((name, times) in data) {
+            val newest = times.maxOrNull() ?: continue
+            if (newest < newestAll - 2_000_000_000L) continue
+            val f = fpsOf(times) ?: continue
+            if (f > bestFps) {
+                bestFps = f
+                best = name
+            }
+        }
+        return best
     }
 
     private fun readFps(): String {
-        var name = layerName
-        var times = if (name != null) latencyTimes(name) else emptyList()
         val now = System.currentTimeMillis()
-        if (times.size < 5 && now - lastFind > 5000L) {
+        if ((layerName == null || now - lastFind > 5000L) && now - lastFind > 2000L) {
             lastFind = now
-            name = findLayer()
-            layerName = name
-            times = if (name != null) latencyTimes(name) else emptyList()
+            layerName = findBestLayer()
         }
-        if (times.size < 2) return "--"
-        val newest = times.maxOrNull() ?: return "--"
-        val window = times.filter { it > newest - 1_000_000_000L }
-        val oldest = window.minOrNull() ?: return "--"
-        val span = newest - oldest
-        if (window.size < 2 || span <= 0L) return "--"
-        val value = ((window.size - 1) * 1_000_000_000.0 / span).toInt().coerceIn(0, 240)
-        return value.toString()
+        val name = layerName ?: return "--"
+        val f = fpsOf(latencyTimes(name))
+        if (f == null) {
+            layerName = null
+            return "--"
+        }
+        return f.toString()
     }
 }
