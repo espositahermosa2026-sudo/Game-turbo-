@@ -34,7 +34,6 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextClock
 import android.widget.TextView
-import android.widget.Toast
 class OverlayService : Service() {
 private lateinit var windowManager: WindowManager
 private var bubbleView: View? = null
@@ -42,6 +41,7 @@ private var panelView: View? = null
 private var panelVisible = false
 private var mira: MiraManager? = null
 private var rotView: View? = null
+private var msgView: TextView? = null
 private val tealInt = AColor.parseColor("#1DE9B6")
 private val panelBg = AColor.parseColor("#D90B1412")
 private val grayText = AColor.parseColor("#CFD8DC")
@@ -173,6 +173,7 @@ private fun togglePanel() {
 if (panelVisible) {
 handler.removeCallbacks(statsRunnable)
 ShizukuHelper.stopStats()
+msgView = null
 statsView = null
 panelView?.let { windowManager.removeView(it) }
 panelVisible = false
@@ -194,6 +195,7 @@ if (label == "Girar pantalla") {
 setRotation(newState)
 return
 }
+if (label == "Limpiador de RAM" || label == "Alto rend." || label == "Bloq. notif.") msgView?.text = label + "..."
 Thread {
 val msg: String? = when (label) {
 "Limpiador de RAM" -> ShizukuHelper.cleanRam()
@@ -201,7 +203,7 @@ val msg: String? = when (label) {
 "Bloq. notif." -> ShizukuHelper.blockNotifications(newState)
 else -> null
 }
-if (msg != null) handler.post { Toast.makeText(this, label + ": " + msg, Toast.LENGTH_SHORT).show() }
+if (msg != null) handler.post { msgView?.text = label + ": " + msg }
 }.start()
 }
 private fun setRotation(on: Boolean) {
@@ -421,9 +423,17 @@ gravity = Gravity.CENTER
 setOnClickListener { togglePanel() }
 }
 root.addView(closeBtn, place(s, 590f, 312f, 100f, 46f))
+val msg = TextView(this).apply {
+setTextSize(TypedValue.COMPLEX_UNIT_PX, 22f * s)
+setTextColor(tealInt)
+gravity = Gravity.CENTER
+setShadowLayer(4f, 0f, 0f, AColor.BLACK)
+}
+msgView = msg
+root.addView(msg, place(s, 160f, 364f, 960f, 40f))
 val params = WindowManager.LayoutParams(
 panelW,
-(362f * s).toInt(),
+(406f * s).toInt(),
 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
