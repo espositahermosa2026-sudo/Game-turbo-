@@ -18,6 +18,7 @@ import android.graphics.drawable.Drawable
 import android.os.BatteryManager
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.MotionEvent
@@ -331,13 +332,11 @@ class GtIcon(private val kind: Int) : Drawable() {
    c.drawLine(8f, 18.9f, 9.4f, 22.7f, p)
    c.drawLine(8f, 18.9f, 11.9f, 18.2f, p)
   } else if (kind == 4) {
-   c.drawRoundRect(RectF(3f, 7f, 21f, 17f), 4f, 4f, p)
-   c.drawLine(7f, 10f, 7f, 14f, p)
-   c.drawLine(5f, 12f, 9f, 12f, p)
-   p.style = Paint.Style.FILL
-   c.drawCircle(15f, 12f, 1.2f, p)
-   c.drawCircle(18f, 12f, 1.2f, p)
-  } else if (kind == 1) {
+  c.drawCircle(12f, 12f, 9f, p)
+  c.drawLine(10f, 8f, 10f, 16f, p)
+  c.drawLine(10f, 16f, 16.5f, 12f, p)
+  c.drawLine(16.5f, 12f, 10f, 8f, p)
+ } else if (kind == 1) {
    c.drawCircle(12f, 12f, 6f, p)
    c.drawLine(12f, 2f, 12f, 8f, p)
    c.drawLine(12f, 16f, 12f, 22f, p)
@@ -398,8 +397,10 @@ class GtDiamond(private val size: Int, color: Int) : Drawable() {
  override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 
-class KView(context: Context, private val marker: Boolean) : View(context) {
- var picked = false
+class MacroStep(val gap: Long, val x1: Int, val y1: Int, val x2: Int, val y2: Int, val dur: Long)
+
+class MacroBtn(context: Context) : View(context) {
+ var active = false
  private val p = Paint(Paint.ANTI_ALIAS_FLAG)
 
  override fun onDraw(c: Canvas) {
@@ -407,49 +408,93 @@ class KView(context: Context, private val marker: Boolean) : View(context) {
   val cy = height / 2f
   val r = minOf(cx, cy) - 4f
   p.style = Paint.Style.FILL
-  p.color = Color.parseColor(if (marker) "#44FF1744" else "#331DE9B6")
+  p.color = Color.parseColor(if (active) "#88FF1744" else "#551DE9B6")
   c.drawCircle(cx, cy, r, p)
   p.style = Paint.Style.STROKE
-  p.strokeWidth = if (picked) 7f else 3f
-  p.color = Color.parseColor(if (marker) "#FF1744" else "#1DE9B6")
+  p.strokeWidth = 3f
+  p.color = Color.parseColor(if (active) "#FF1744" else "#1DE9B6")
   c.drawCircle(cx, cy, r, p)
-  if (marker) {
-   c.drawLine(cx - r / 2, cy, cx + r / 2, cy, p)
-   c.drawLine(cx, cy - r / 2, cx, cy + r / 2, p)
+  p.style = Paint.Style.FILL
+  p.color = Color.WHITE
+  if (active) {
+   c.drawRect(cx - r / 4, cy - r / 4, cx + r / 4, cy + r / 4, p)
+  } else {
+   val t = Path()
+   t.moveTo(cx - r / 4, cy - r / 3)
+   t.lineTo(cx - r / 4, cy + r / 3)
+   t.lineTo(cx + r / 3, cy)
+   t.close()
+   c.drawPath(t, p)
   }
  }
 }
 
-class KeyData(var x: Int, var y: Int, var tx: Int, var ty: Int) {
- var v: KView? = null
- var m: KView? = null
+class RecView(context: Context, private val d: Float, private val onStep: (MacroStep) -> Unit) : View(context) {
+ private val pts = ArrayList<Pair<Float, Float>>()
+ private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+ private var t0 = 0L
+ private var last = 0L
+ private var x1 = 0
+ private var y1 = 0
+
+ override fun onTouchEvent(e: MotionEvent): Boolean {
+  when (e.action) {
+   MotionEvent.ACTION_DOWN -> {
+    t0 = SystemClock.uptimeMillis()
+    x1 = e.rawX.toInt()
+    y1 = e.rawY.toInt()
+    pts.add(Pair(e.rawX, e.rawY))
+    invalidate()
+   }
+   MotionEvent.ACTION_UP -> {
+    val now = SystemClock.uptimeMillis()
+    val gap = if (last == 0L) 0L else t0 - last
+    last = now
+    onStep(MacroStep(gap, x1, y1, e.rawX.toInt(), e.rawY.toInt(), maxOf(40L, now - t0)))
+   }
+  }
+  return true
+ }
+
+ override fun onDraw(c: Canvas) {
+  for (i in pts.indices) {
+   p.style = Paint.Style.FILL
+   p.color = Color.parseColor("#66FF1744")
+   c.drawCircle(pts[i].first, pts[i].second, 18f * d, p)
+   p.color = Color.WHITE
+   p.textSize = 14f * d
+   p.textAlign = Paint.Align.CENTER
+   c.drawText("${i + 1}", pts[i].first, pts[i].second + 5f * d, p)
+  }
+ }
 }
 
-class KeymapManager(private val ctx: Context, private val wm: WindowManager) {
+class MacroManager(private val ctx: Context, private val wm: WindowManager) {
  private val d = ctx.resources.displayMetrics.density
- private val prefs = ctx.getSharedPreferences("keymap", Context.MODE_PRIVATE)
+ private val prefs = ctx.getSharedPreferences("macro", Context.MODE_PRIVATE)
  private val teal = Color.parseColor("#1DE9B6")
- private val keys = ArrayList<KeyData>()
- private var size = prefs.getInt("size", (56 * d).toInt())
- private var shown = false
- private var editing = false
+ private val hd = Handler(Looper.getMainLooper())
+ private val steps = ArrayList<MacroStep>()
+ private var loop = prefs.getBoolean("loop", false)
+ private var btn: MacroBtn? = null
+ private var rec: RecView? = null
  private var menu: View? = null
- private var sel = -1
+ private var menuLp: WindowManager.LayoutParams? = null
+ @Volatile private var running = false
 
  private fun dp(v: Int): Int = (v * d).toInt()
 
  private fun load() {
-  keys.clear()
-  val raw = prefs.getString("keys", "") ?: ""
-  for (part in raw.split(";")) {
-   val n = part.split(",").mapNotNull { it.toIntOrNull() }
-   if (n.size == 4) keys.add(KeyData(n[0], n[1], n[2], n[3]))
+  steps.clear()
+  for (part in (prefs.getString("steps", "") ?: "").split(";")) {
+   val n = part.split(",").mapNotNull { it.toLongOrNull() }
+   if (n.size == 6) steps.add(MacroStep(n[0], n[1].toInt(), n[2].toInt(), n[3].toInt(), n[4].toInt(), n[5]))
   }
  }
 
  private fun save() {
-  val raw = keys.joinToString(";") { "${it.x},${it.y},${it.tx},${it.ty}" }
-  prefs.edit().putString("keys", raw).putInt("size", size).apply()
+  val raw = steps.joinToString(";") { "${it.gap},${it.x1},${it.y1},${it.x2},${it.y2},${it.dur}" }
+  prefs.edit().putString("steps", raw).putBoolean("loop", loop).apply()
  }
 
  @Suppress("DEPRECATION")
@@ -464,9 +509,9 @@ class KeymapManager(private val ctx: Context, private val wm: WindowManager) {
   }
  }
 
- private fun lp(cx: Int, cy: Int): WindowManager.LayoutParams {
+ private fun lp(w: Int, hh: Int): WindowManager.LayoutParams {
   val p = WindowManager.LayoutParams(
-   size, size,
+   w, hh,
    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
@@ -474,8 +519,6 @@ class KeymapManager(private val ctx: Context, private val wm: WindowManager) {
    PixelFormat.TRANSLUCENT
   )
   p.gravity = Gravity.TOP or Gravity.START
-  p.x = cx - size / 2
-  p.y = cy - size / 2
   if (Build.VERSION.SDK_INT >= 28) {
    p.layoutInDisplayCutoutMode =
     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -483,113 +526,14 @@ class KeymapManager(private val ctx: Context, private val wm: WindowManager) {
   return p
  }
 
- private fun select(i: Int) {
-  sel = i
-  keys.forEachIndexed { j, k ->
-   k.v?.picked = (j == i)
-   k.m?.picked = (j == i)
-   k.v?.invalidate()
-   k.m?.invalidate()
-  }
- }
-
- private fun addKey(k: KeyData) {
-  val v = KView(ctx, false)
-  val p = lp(k.x, k.y)
-  var ix = 0
-  var iy = 0
-  var tx = 0f
-  var ty = 0f
-  v.setOnTouchListener { _, e ->
-   if (editing) {
-    when (e.action) {
-     MotionEvent.ACTION_DOWN -> {
-      ix = k.x
-      iy = k.y
-      tx = e.rawX
-      ty = e.rawY
-      select(keys.indexOf(k))
-     }
-     MotionEvent.ACTION_MOVE -> {
-      k.x = ix + (e.rawX - tx).toInt()
-      k.y = iy + (e.rawY - ty).toInt()
-      p.x = k.x - size / 2
-      p.y = k.y - size / 2
-      wm.updateViewLayout(v, p)
-     }
-     MotionEvent.ACTION_UP -> save()
-    }
-   } else {
-    when (e.action) {
-     MotionEvent.ACTION_DOWN -> ShizukuHelper.touchDown(k.tx, k.ty)
-     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> ShizukuHelper.touchUp(k.tx, k.ty)
-    }
-   }
-   true
-  }
-  k.v = v
-  wm.addView(v, p)
- }
-
- private fun addMarker(k: KeyData) {
-  val v = KView(ctx, true)
-  val p = lp(k.tx, k.ty)
-  var ix = 0
-  var iy = 0
-  var tx = 0f
-  var ty = 0f
-  v.setOnTouchListener { _, e ->
-   when (e.action) {
-    MotionEvent.ACTION_DOWN -> {
-     ix = k.tx
-     iy = k.ty
-     tx = e.rawX
-     ty = e.rawY
-     select(keys.indexOf(k))
-    }
-    MotionEvent.ACTION_MOVE -> {
-     k.tx = ix + (e.rawX - tx).toInt()
-     k.ty = iy + (e.rawY - ty).toInt()
-     p.x = k.tx - size / 2
-     p.y = k.ty - size / 2
-     wm.updateViewLayout(v, p)
-    }
-    MotionEvent.ACTION_UP -> save()
-   }
-   true
-  }
-  k.m = v
-  wm.addView(v, p)
- }
-
- private fun clearViews() {
-  for (k in keys) {
-   k.v?.let { try { wm.removeView(it) } catch (e: Exception) { } }
-   k.m?.let { try { wm.removeView(it) } catch (e: Exception) { } }
-   k.v = null
-   k.m = null
-  }
- }
-
- private fun buildAll() {
-  clearViews()
-  for (k in keys) {
-   addKey(k)
-   if (editing) addMarker(k)
-  }
- }
-
  fun setVisible(on: Boolean) {
   if (on) {
-   if (!shown) {
-    load()
-    shown = true
-    buildAll()
-   }
+   showBtn()
   } else {
+   running = false
    closeEditor()
-   clearViews()
-   shown = false
+   btn?.let { try { wm.removeView(it) } catch (e: Exception) { } }
+   btn = null
   }
  }
 
@@ -597,55 +541,117 @@ class KeymapManager(private val ctx: Context, private val wm: WindowManager) {
   setVisible(false)
  }
 
- fun showEditor() {
-  if (editing) return
-  if (!shown) {
-   load()
-   shown = true
+ private fun showBtn() {
+  if (btn != null) return
+  load()
+  val size = dp(60)
+  val v = MacroBtn(ctx)
+  val p = lp(size, size)
+  p.x = prefs.getInt("bx", dp(200))
+  p.y = prefs.getInt("by", dp(120))
+  var ix = 0
+  var iy = 0
+  var tx = 0f
+  var ty = 0f
+  var moved = false
+  v.setOnTouchListener { _, e ->
+   when (e.action) {
+    MotionEvent.ACTION_DOWN -> {
+     ix = p.x
+     iy = p.y
+     tx = e.rawX
+     ty = e.rawY
+     moved = false
+    }
+    MotionEvent.ACTION_MOVE -> {
+     val dx = e.rawX - tx
+     val dy = e.rawY - ty
+     if (moved || kotlin.math.abs(dx) > dp(8) || kotlin.math.abs(dy) > dp(8)) {
+      moved = true
+      p.x = ix + dx.toInt()
+      p.y = iy + dy.toInt()
+      wm.updateViewLayout(v, p)
+     }
+    }
+    MotionEvent.ACTION_UP -> {
+     if (moved) {
+      prefs.edit().putInt("bx", p.x).putInt("by", p.y).apply()
+     } else {
+      toggleRun()
+     }
+    }
+   }
+   true
   }
-  editing = true
-  buildAll()
-  showMenu()
+  btn = v
+  wm.addView(v, p)
+ }
+
+ private fun toggleRun() {
+  if (running) {
+   running = false
+   return
+  }
+  if (steps.isEmpty()) return
+  running = true
+  btn?.active = true
+  btn?.invalidate()
+  Thread {
+   do {
+    for (s in steps.toList()) {
+     if (!running) break
+     var left = s.gap - 100
+     while (left > 0 && running) {
+      Thread.sleep(minOf(left, 50L))
+      left -= 50
+     }
+     if (!running) break
+     ShizukuHelper.runCommand("input swipe ${s.x1} ${s.y1} ${s.x2} ${s.y2} ${s.dur}")
+    }
+   } while (running && loop)
+   running = false
+   hd.post {
+    btn?.active = false
+    btn?.invalidate()
+   }
+  }.start()
+ }
+
+ private fun front() {
+  val m = menu ?: return
+  try {
+   wm.removeView(m)
+   wm.addView(m, menuLp)
+  } catch (e: Exception) { }
+ }
+
+ private fun startRec() {
+  steps.clear()
+  val (w, hh) = screen()
+  val v = RecView(ctx, d) { steps.add(it) }
+  val p = lp(w, hh)
+  p.x = 0
+  p.y = 0
+  rec = v
+  wm.addView(v, p)
+  front()
+ }
+
+ private fun stopRec() {
+  rec?.let { try { wm.removeView(it) } catch (e: Exception) { } }
+  rec = null
+  save()
  }
 
  private fun closeEditor() {
-  if (!editing) return
-  editing = false
+  stopRec()
   menu?.let { try { wm.removeView(it) } catch (e: Exception) { } }
   menu = null
-  sel = -1
-  save()
-  buildAll()
  }
 
- private fun addNew() {
-  val (w, h) = screen()
-  keys.add(KeyData(w / 2 - dp(120), h / 2, w / 2 + dp(120), h / 2))
-  save()
-  buildAll()
-  select(keys.size - 1)
- }
-
- private fun resize(delta: Int) {
-  size = (size + delta).coerceIn(dp(32), dp(120))
-  save()
-  buildAll()
-  select(sel)
- }
-
- private fun deleteSel() {
-  if (sel !in keys.indices) return
-  val k = keys[sel]
-  k.v?.let { try { wm.removeView(it) } catch (e: Exception) { } }
-  k.m?.let { try { wm.removeView(it) } catch (e: Exception) { } }
-  keys.removeAt(sel)
-  sel = -1
-  save()
-  buildAll()
- }
-
- private fun showMenu() {
+ fun showEditor() {
   if (menu != null) return
+  showBtn()
   val box = LinearLayout(ctx).apply {
    orientation = LinearLayout.HORIZONTAL
    gravity = Gravity.CENTER_VERTICAL
@@ -657,26 +663,42 @@ class KeymapManager(private val ctx: Context, private val wm: WindowManager) {
    }
   }
   val hint = TextView(ctx)
-  hint.text = "Verde = botón\nRojo = dónde toca"
+  hint.text = "Graba: toca, mantén\no desliza los pasos"
   hint.textSize = 11f
   hint.setTextColor(teal)
   hint.setPadding(0, 0, dp(8), 0)
   box.addView(hint)
 
-  fun btn(label: String, onClick: () -> Unit) {
+  fun mk(label: String, onClick: (TextView) -> Unit) {
    val b = TextView(ctx)
    b.text = label
    b.textSize = 14f
    b.setTextColor(Color.WHITE)
    b.setPadding(dp(10), dp(8), dp(10), dp(8))
-   b.setOnClickListener { onClick() }
+   b.setOnClickListener { onClick(b) }
    box.addView(b)
   }
-  btn("+ Botón") { addNew() }
-  btn("Tam +") { resize(dp(8)) }
-  btn("Tam -") { resize(-dp(8)) }
-  btn("Borrar") { deleteSel() }
-  btn("Listo") { closeEditor() }
+  mk("● Grabar") { b ->
+   if (rec == null) {
+    startRec()
+    b.text = "■ Parar"
+    b.setTextColor(teal)
+   } else {
+    stopRec()
+    b.text = "● Grabar"
+    b.setTextColor(Color.WHITE)
+   }
+  }
+  mk(if (loop) "Repetir: Sí" else "Repetir: No") { b ->
+   loop = !loop
+   save()
+   b.text = if (loop) "Repetir: Sí" else "Repetir: No"
+  }
+  mk("Borrar") {
+   steps.clear()
+   save()
+  }
+  mk("Listo") { closeEditor() }
 
   val mp = WindowManager.LayoutParams(
    WindowManager.LayoutParams.WRAP_CONTENT,
@@ -689,6 +711,7 @@ class KeymapManager(private val ctx: Context, private val wm: WindowManager) {
   mp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
   mp.y = dp(16)
   menu = box
+  menuLp = mp
   wm.addView(box, mp)
  }
 }
