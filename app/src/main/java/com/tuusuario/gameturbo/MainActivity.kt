@@ -60,18 +60,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-fun activateGameplay(context: Context) {
-    if (!Settings.canDrawOverlays(context)) {
-        val intent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:${context.packageName}")
-        )
-        context.startActivity(intent)
-    } else {
-        context.startService(Intent(context, OverlayService::class.java))
-    }
-}
-
 fun openOverlaySettings(context: Context) {
     val intent = Intent(
         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -81,7 +69,16 @@ fun openOverlaySettings(context: Context) {
 }
 
 fun startGame(context: Context, pkg: String) {
+    if (!Settings.canDrawOverlays(context)) {
+        openOverlaySettings(context)
+        return
+    }
+    context.startService(Intent(context, OverlayService::class.java))
     context.packageManager.getLaunchIntentForPackage(pkg)?.let { context.startActivity(it) }
+}
+
+fun stopGameplay(context: Context) {
+    context.stopService(Intent(context, OverlayService::class.java))
 }
 
 fun batteryPercent(context: Context): Int {
@@ -243,11 +240,11 @@ fun MainScreen() {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         PanelButton(
                             modifier = Modifier.size(68.dp),
-                            onClick = { activateGameplay(context) }
+                            onClick = { stopGameplay(context) }
                         ) {
-                            Text("⚡", color = IconTint, fontSize = 26.sp)
+                            Text("■", color = IconTint, fontSize = 26.sp)
                         }
-                        Text("Activar", color = Color(0xFF8A9498), fontSize = 11.sp)
+                        Text("Detener", color = Color(0xFF8A9498), fontSize = 11.sp)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         PanelButton(
