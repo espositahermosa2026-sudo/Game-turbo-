@@ -10,7 +10,6 @@ import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
-import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.ClipDrawable
@@ -44,7 +43,6 @@ private var mira: MiraManager? = null
 private var rotView: View? = null
 private var info: InfoManager? = null
 private var km: KmManager? = null
-private var shield = ArrayList<View>()
 private var msgView: TextView? = null
 private val tealInt = AColor.parseColor("#1DE9B6")
 private val panelBg = AColor.parseColor("#D90B1412")
@@ -203,8 +201,11 @@ info?.setVisible(newState)
 return
 }
 if (label == "Bloq. gestos") {
-setShield(newState)
-msgView?.text = if (newState) "Bloq. gestos: bordes izquierdo y derecho bloqueados" else "Bloq. gestos: desactivado"
+msgView?.text = "Bloq. gestos..."
+Thread {
+val r = ShizukuHelper.blockGestures(newState)
+handler.post { msgView?.text = "Bloq. gestos: " + r }
+}.start()
 return
 }
 if (label == "Girar pantalla") {
@@ -225,38 +226,6 @@ msgView?.text = label + ": " + msg
 done()
 }
 }.start()
-}
-private fun setShield(on: Boolean) {
-if (on && shield.isEmpty()) {
-val (w, h) = screenSize()
-val sw = dp(28)
-for (left in listOf(true, false)) {
-val v = View(this)
-val p = WindowManager.LayoutParams(
-sw, h,
-WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-PixelFormat.TRANSLUCENT
-)
-p.gravity = Gravity.TOP or Gravity.START
-p.x = if (left) 0 else w - sw
-p.y = 0
-if (Build.VERSION.SDK_INT >= 28) p.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-v.addOnLayoutChangeListener { view, l, t, r, b, _, _, _, _ ->
-if (Build.VERSION.SDK_INT >= 29) view.systemGestureExclusionRects = listOf(Rect(0, 0, r - l, b - t))
-}
-windowManager.addView(v, p)
-shield.add(v)
-}
-} else if (!on) {
-for (v in shield) {
-try {
-windowManager.removeView(v)
-} catch (e: Exception) {
-}
-}
-shield.clear()
-}
 }
 private fun setRotation(on: Boolean) {
 if (on && rotView == null) {
@@ -513,7 +482,6 @@ ShizukuHelper.stopStats()
 mira?.destroy()
 info?.destroy()
 km?.destroy()
-setShield(false)
 rotView?.let { windowManager.removeView(it) }
 bubbleView?.let { windowManager.removeView(it) }
 if (panelVisible) panelView?.let { windowManager.removeView(it) }
