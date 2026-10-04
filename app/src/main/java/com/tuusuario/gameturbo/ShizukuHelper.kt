@@ -107,20 +107,19 @@ object ShizukuHelper {
         return "${pkgs.size} apps cerradas"
     }
 
-    // Bloquea los gestos de navegación cambiando a botones (Xiaomi o Android estándar)
+    // Bloquea los gestos fijando el juego en pantalla (fijar app), sin cambiar el modo de navegación
     fun blockGestures(enable: Boolean): String {
-        val fsg = runCommand("settings get global force_fsg_nav_bar").trim()
-        if (fsg == "0" || fsg == "1") {
-            runCommand("settings put global force_fsg_nav_bar ${if (enable) 0 else 1}")
-            return if (enable) "gestos bloqueados (modo botones)" else "gestos activados"
+        if (!enable) {
+            val r = runCommand("am task lock stop")
+            return if (r.isBlank()) "gestos desbloqueados" else brief(r)
         }
-        val mode = if (enable) "threebutton" else "gestural"
-        val out = runCommand("cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.$mode")
-        return if (out.isBlank()) {
-            if (enable) "gestos bloqueados (modo botones)" else "gestos activados"
-        } else {
-            brief(out)
-        }
+        val out = runCommand(
+            "dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -n 3"
+        )
+        val id = Regex("""u\d+ [A-Za-z0-9_.]+/\S+ t(\d+)""").find(out)?.groupValues?.get(1)
+            ?: return "no encontré el juego abierto"
+        val r = runCommand("am task lock $id")
+        return if (r.isBlank()) "gestos bloqueados" else brief(r)
     }
 
     // Graba la pantalla en partes de 3 minutos en Películas/GameTurbo (sin audio)
