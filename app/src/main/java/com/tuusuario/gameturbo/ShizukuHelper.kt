@@ -66,15 +66,15 @@ object ShizukuHelper {
         out.trim().lines().firstOrNull { it.isNotBlank() }?.take(70) ?: "Listo"
 
     fun highPerformance(enable: Boolean): String {
-        val game = foregroundPackage() ?: knownGames[0]
-        val mode = if (enable) "performance" else "standard"
-        val n = if (enable) 2 else 1
         val governor = if (enable) "performance" else "schedutil"
         val a = runCommand("cmd power set-fixed-performance-mode-enabled $enable")
-        val b = runCommand("cmd game mode $n $game || cmd game set --mode $mode $game")
         runCommand("settings put global low_power 0")
         runCommand("for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $governor > \$cpu; done")
-        return brief(if (a.isNotBlank()) a else b)
+        return if (a.isBlank()) {
+            if (enable) "modo rendimiento activado" else "modo rendimiento desactivado"
+        } else {
+            brief(a)
+        }
     }
 
     fun blockCalls(enable: Boolean) {
@@ -105,6 +105,38 @@ object ShizukuHelper {
         runCommand("am kill-all")
         runCommand("pm trim-caches 999G")
         return "${pkgs.size} apps cerradas"
+    }
+
+    // Bloquea los gestos de navegación cambiando a botones (Xiaomi o Android estándar)
+    fun blockGestures(enable: Boolean): String {
+        val fsg = runCommand("settings get global force_fsg_nav_bar").trim()
+        if (fsg == "0" || fsg == "1") {
+            runCommand("settings put global force_fsg_nav_bar ${if (enable) 0 else 1}")
+            return if (enable) "gestos bloqueados (modo botones)" else "gestos activados"
+        }
+        val mode = if (enable) "threebutton" else "gestural"
+        val out = runCommand("cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.$mode")
+        return if (out.isBlank()) {
+            if (enable) "gestos bloqueados (modo botones)" else "gestos activados"
+        } else {
+            brief(out)
+        }
+    }
+
+    // Graba la pantalla en partes de 3 minutos en Películas/GameTurbo (sin audio)
+    fun recordScreen(enable: Boolean): String {
+        val flag = "/data/local/tmp/gt_rec"
+        if (enable) {
+            runCommand(
+                "rm -f $flag; pkill -2 screenrecord; sleep 1; mkdir -p /sdcard/Movies/GameTurbo; touch $flag; " +
+                    "nohup sh -c 'while [ -f $flag ]; do screenrecord --bit-rate 8000000 --time-limit 180 " +
+                    "/sdcard/Movies/GameTurbo/rec_\$(date +%Y%m%d_%H%M%S).mp4; done' > /dev/null 2>&1 &"
+            )
+            val pid = runCommand("sleep 2; pidof screenrecord").trim()
+            return if (pid.isEmpty()) "no se pudo iniciar la grabación" else "grabando (partes de 3 min)"
+        }
+        runCommand("rm -f $flag; pkill -2 screenrecord || kill -2 \$(pidof screenrecord); sleep 2")
+        return "guardado en Películas/GameTurbo"
     }
 
     private val lock = Any()
@@ -148,7 +180,10 @@ object ShizukuHelper {
 
     private val knownGames = listOf("com.dts.freefiremax", "com.dts.freefireth")
 
+    private var users = 0
+
     fun startStats() {
+        users++
         if (running) return
         running = true
         val gen = ++generation
@@ -166,7 +201,8 @@ object ShizukuHelper {
     }
 
     fun stopStats() {
-        running = false
+        if (users > 0) users--
+        if (users == 0) running = false
     }
 
     private fun readCpu(): String {
