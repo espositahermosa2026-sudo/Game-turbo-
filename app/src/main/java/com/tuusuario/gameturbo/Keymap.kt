@@ -40,6 +40,7 @@ class KmView(context: Context, private val kind: Int, private val d: Float) : Vi
   private val p = Paint(Paint.ANTI_ALIAS_FLAG)
 
   override fun onDraw(c: Canvas) {
+    if (quiet) return
     val cx = width / 2f
     val cy = height / 2f
     val r = minOf(cx, cy) - 4f
