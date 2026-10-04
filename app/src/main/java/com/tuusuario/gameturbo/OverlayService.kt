@@ -25,6 +25,7 @@ import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -43,6 +44,7 @@ private var mira: MiraManager? = null
 private var rotView: View? = null
 private var info: InfoManager? = null
 private var km: KmManager? = null
+private var backView: View? = null
 private var msgView: TextView? = null
 private val tealInt = AColor.parseColor("#1DE9B6")
 private val panelBg = AColor.parseColor("#D90B1412")
@@ -201,11 +203,9 @@ info?.setVisible(newState)
 return
 }
 if (label == "Bloq. gestos") {
-msgView?.text = "Bloq. gestos..."
-Thread {
-val r = ShizukuHelper.blockGestures(newState)
-handler.post { msgView?.text = "Bloq. gestos: " + r }
-}.start()
+setBackBlock(newState)
+msgView?.text = if (newState) "Bloq. gestos: gesto de regresar bloqueado" else "Bloq. gestos: desactivado"
+if (newState) Thread { ShizukuHelper.blockGestures(false) }.start()
 return
 }
 if (label == "Girar pantalla") {
@@ -226,6 +226,23 @@ msgView?.text = label + ": " + msg
 done()
 }
 }.start()
+}
+private fun setBackBlock(on: Boolean) {
+if (on && backView == null) {
+val v = BackBlock(this)
+val p = WindowManager.LayoutParams(
+1, 1,
+WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+PixelFormat.TRANSLUCENT
+)
+p.gravity = Gravity.TOP or Gravity.START
+backView = v
+windowManager.addView(v, p)
+} else if (!on) {
+backView?.let { windowManager.removeView(it) }
+backView = null
+}
 }
 private fun setRotation(on: Boolean) {
 if (on && rotView == null) {
@@ -482,6 +499,7 @@ ShizukuHelper.stopStats()
 mira?.destroy()
 info?.destroy()
 km?.destroy()
+setBackBlock(false)
 rotView?.let { windowManager.removeView(it) }
 bubbleView?.let { windowManager.removeView(it) }
 if (panelVisible) panelView?.let { windowManager.removeView(it) }
@@ -620,5 +638,10 @@ canvas.drawText("RAM", 97f, 100f, labelPaint)
 canvas.drawText("FPS", 200f, 110f, labelPaint)
 canvas.drawText("CPU", 303f, 100f, labelPaint)
 canvas.restore()
+}
+}
+class BackBlock(context: Context) : View(context) {
+override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+return if (e.keyCode == KeyEvent.KEYCODE_BACK) true else super.dispatchKeyEvent(e)
 }
 }
