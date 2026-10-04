@@ -107,19 +107,36 @@ object ShizukuHelper {
         return "${pkgs.size} apps cerradas"
     }
 
-    // Bloquea los gestos fijando el juego en pantalla (fijar app), sin cambiar el modo de navegación
-    fun blockGestures(enable: Boolean): String {
-        if (!enable) {
-            val r = runCommand("am task lock stop")
-            return if (r.isBlank()) "gestos desbloqueados" else brief(r)
+    // Bloquea el gesto de regresar de los bordes izquierdo y derecho (deja la sensibilidad en 0)
+    private var gBlocked = false
+    private var prevL = ""
+    private var prevR = ""
+
+    private fun restoreKey(key: String, prev: String) {
+        if (prev.isEmpty() || prev == "null") {
+            runCommand("settings delete secure $key")
+        } else {
+            runCommand("settings put secure $key $prev")
         }
-        val out = runCommand(
-            "dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head -n 3"
-        )
-        val id = Regex("""u\d+ [A-Za-z0-9_.]+/\S+ t(\d+)""").find(out)?.groupValues?.get(1)
-            ?: return "no encontré el juego abierto"
-        val r = runCommand("am task lock $id")
-        return if (r.isBlank()) "gestos bloqueados" else brief(r)
+    }
+
+    fun blockGestures(enable: Boolean): String {
+        val kL = "back_gesture_inset_scale_left"
+        val kR = "back_gesture_inset_scale_right"
+        if (enable) {
+            if (!gBlocked) {
+                prevL = runCommand("settings get secure $kL").trim()
+                prevR = runCommand("settings get secure $kR").trim()
+                gBlocked = true
+            }
+            runCommand("settings put secure $kL 0; settings put secure $kR 0")
+            val now = runCommand("settings get secure $kL").trim()
+            return "sensibilidad de bordes en $now"
+        }
+        restoreKey(kL, prevL)
+        restoreKey(kR, prevR)
+        gBlocked = false
+        return "sensibilidad de bordes restaurada"
     }
 
     // Graba la pantalla en partes de 3 minutos en Películas/GameTurbo (sin audio)
