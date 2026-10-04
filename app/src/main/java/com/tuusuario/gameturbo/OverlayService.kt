@@ -42,6 +42,7 @@ private var panelVisible = false
 private var mira: MiraManager? = null
 private var rotView: View? = null
 private var info: InfoManager? = null
+private var keymap: KeymapManager? = null
 private var msgView: TextView? = null
 private val tealInt = AColor.parseColor("#1DE9B6")
 private val panelBg = AColor.parseColor("#D90B1412")
@@ -56,7 +57,8 @@ private val toggleLabels = setOf(
 "Bloq. notif.",
 "Bloq. gestos",
 "Info real",
-"Grabar"
+"Grabar",
+"Edit Keymap"
 )
 private val toggleStates = mutableMapOf<String, Boolean>()
 private val handler = Handler(Looper.getMainLooper())
@@ -73,6 +75,7 @@ super.onCreate()
 windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 mira = MiraManager(this, windowManager)
 info = InfoManager(this, windowManager)
+keymap = KeymapManager(this, windowManager)
 showBubble()
 }
 private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -188,6 +191,11 @@ if (label == "Crosshair Assistant") {
 mira?.setVisible(newState)
 return
 }
+if (label == "Edit Keymap") {
+keymap?.setVisible(newState)
+msgView?.text = if (newState) "Keymap activo (mantén presionado para editar)" else "Keymap apagado"
+return
+}
 if (label == "Info real") {
 info?.setVisible(newState)
 return
@@ -293,13 +301,13 @@ if (label.endsWith("RAM")) {
 handler.postDelayed({ refreshStats() }, 1500)
 }
 }
-if (label == "Crosshair Assistant") {
+if (label == "Crosshair Assistant" || label == "Edit Keymap") {
 item.setOnLongClickListener {
 toggleStates[label] = true
 circle.background = circleBg(true, s)
 icon.setColorFilter(tealInt)
 if (panelVisible) togglePanel()
-mira?.showMenu()
+if (label == "Edit Keymap") keymap?.showEditor() else mira?.showMenu()
 true
 }
 }
@@ -390,6 +398,7 @@ val stats = StatsView(this, s, tealInt, grayText)
 statsView = stats
 root.addView(stats, place(s, 440f, 64f, 400f, 156f))
 val leftItems = listOf(
+-4 to "Edit Keymap",
 -3 to "Girar pantalla",
 R.drawable.ic_cpu to "Alto rend.",
 -1 to "Crosshair Assistant",
@@ -401,16 +410,16 @@ R.drawable.ic_gesture_off to "Bloq. gestos",
 R.drawable.ic_chart to "Info real",
 R.drawable.ic_record to "Grabar"
 )
-val leftCols = floatArrayOf(110f, 270f)
-val rightCols = floatArrayOf(1010f, 1170f)
-val rowTops = floatArrayOf(18f, 146f)
+val leftCols = floatArrayOf(74f, 205f, 336f)
+val rightCols = floatArrayOf(944f, 1075f, 1206f)
+val rowTops = floatArrayOf(24f, 148f)
 leftItems.forEachIndexed { i, (iconRes, label) ->
 val v = buildItem(iconRes, label, s)
-root.addView(v, place(s, leftCols[i % 2] - 75f, rowTops[i / 2], 150f, 116f))
+root.addView(v, place(s, leftCols[i % 3] - 65f, rowTops[i / 3], 130f, 116f))
 }
 rightItems.forEachIndexed { i, (iconRes, label) ->
 val v = buildItem(iconRes, label, s)
-root.addView(v, place(s, rightCols[i % 2] - 75f, rowTops[i / 2], 150f, 116f))
+root.addView(v, place(s, rightCols[i % 3] - 65f, rowTops[i / 3], 130f, 116f))
 }
 val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 val maxVol = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -465,6 +474,7 @@ handler.removeCallbacks(statsRunnable)
 ShizukuHelper.stopStats()
 mira?.destroy()
 info?.destroy()
+keymap?.destroy()
 rotView?.let { windowManager.removeView(it) }
 bubbleView?.let { windowManager.removeView(it) }
 if (panelVisible) panelView?.let { windowManager.removeView(it) }
