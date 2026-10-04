@@ -41,6 +41,7 @@ private var panelView: View? = null
 private var panelVisible = false
 private var mira: MiraManager? = null
 private var rotView: View? = null
+private var info: InfoManager? = null
 private var msgView: TextView? = null
 private val tealInt = AColor.parseColor("#1DE9B6")
 private val panelBg = AColor.parseColor("#D90B1412")
@@ -54,7 +55,8 @@ private val toggleLabels = setOf(
 "Crosshair Assistant",
 "Bloq. notif.",
 "Bloq. gestos",
-"Info real"
+"Info real",
+"Grabar"
 )
 private val toggleStates = mutableMapOf<String, Boolean>()
 private val handler = Handler(Looper.getMainLooper())
@@ -70,6 +72,7 @@ override fun onCreate() {
 super.onCreate()
 windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 mira = MiraManager(this, windowManager)
+info = InfoManager(this, windowManager)
 showBubble()
 }
 private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -185,16 +188,22 @@ if (label == "Crosshair Assistant") {
 mira?.setVisible(newState)
 return
 }
+if (label == "Info real") {
+info?.setVisible(newState)
+return
+}
 if (label == "Girar pantalla") {
 setRotation(newState)
 return
 }
-if (label == "Limpiador de RAM" || label == "Alto rend." || label == "Bloq. notif.") msgView?.text = label + "..."
+msgView?.text = label + "..."
 Thread {
 val msg: String? = when (label) {
 "Limpiador de RAM" -> ShizukuHelper.cleanRam()
 "Alto rend." -> ShizukuHelper.highPerformance(newState)
 "Bloq. notif." -> ShizukuHelper.blockNotifications(newState)
+"Bloq. gestos" -> ShizukuHelper.blockGestures(newState)
+"Grabar" -> ShizukuHelper.recordScreen(newState)
 else -> null
 }
 if (msg != null) handler.post {
@@ -245,7 +254,7 @@ gravity = Gravity.CENTER
 background = circleBg(startActive, s)
 }
 val icon = ImageView(this).apply {
-if (iconRes < 0) setImageDrawable(IconDrawable(-iconRes)) else setImageResource(iconRes)
+if (iconRes < 0) setImageDrawable(GtIcon(-iconRes)) else setImageResource(iconRes)
 setColorFilter(if (startActive) tealInt else grayText)
 }
 val iconSize = (34f * s).toInt()
@@ -331,7 +340,7 @@ setId(1, android.R.id.progress)
 setLayerInset(0, 0, inset, 0, inset)
 setLayerInset(1, 0, inset, 0, inset)
 }
-thumb = DiamondDrawable((22f * s).toInt(), tealInt)
+thumb = GtDiamond((22f * s).toInt(), tealInt)
 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
 override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
 if (fromUser) onChange(p)
@@ -455,6 +464,7 @@ super.onDestroy()
 handler.removeCallbacks(statsRunnable)
 ShizukuHelper.stopStats()
 mira?.destroy()
+info?.destroy()
 rotView?.let { windowManager.removeView(it) }
 bubbleView?.let { windowManager.removeView(it) }
 if (panelVisible) panelView?.let { windowManager.removeView(it) }
@@ -513,35 +523,6 @@ strokePaint.alpha = alpha
 override fun setColorFilter(colorFilter: ColorFilter?) {
 fillPaint.colorFilter = colorFilter
 strokePaint.colorFilter = colorFilter
-}
-@Suppress("OVERRIDE_DEPRECATION")
-override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-}
-class DiamondDrawable(private val size: Int, color: Int) : Drawable() {
-private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-this.color = color
-style = Paint.Style.FILL
-}
-private val path = Path()
-override fun draw(canvas: Canvas) {
-val cx = bounds.exactCenterX()
-val cy = bounds.exactCenterY()
-val r = size / 2f
-path.reset()
-path.moveTo(cx, cy - r)
-path.lineTo(cx + r, cy)
-path.lineTo(cx, cy + r)
-path.lineTo(cx - r, cy)
-path.close()
-canvas.drawPath(path, paint)
-}
-override fun getIntrinsicWidth(): Int = size
-override fun getIntrinsicHeight(): Int = size
-override fun setAlpha(alpha: Int) {
-paint.alpha = alpha
-}
-override fun setColorFilter(colorFilter: ColorFilter?) {
-paint.colorFilter = colorFilter
 }
 @Suppress("OVERRIDE_DEPRECATION")
 override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
@@ -623,49 +604,4 @@ canvas.drawText("FPS", 200f, 110f, labelPaint)
 canvas.drawText("CPU", 303f, 100f, labelPaint)
 canvas.restore()
 }
-}
-class IconDrawable(private val kind: Int) : Drawable() {
-private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = AColor.WHITE
-strokeWidth = 1.8f
-strokeCap = Paint.Cap.ROUND
-}
-override fun draw(c: Canvas) {
-c.save()
-c.translate(bounds.left.toFloat(), bounds.top.toFloat())
-c.scale(bounds.width() / 24f, bounds.height() / 24f)
-p.style = Paint.Style.STROKE
-if (kind == 3) {
-c.drawArc(RectF(4f, 4f, 20f, 20f), 200f, 280f, false, p)
-c.drawLine(8f, 18.9f, 9.4f, 22.7f, p)
-c.drawLine(8f, 18.9f, 11.9f, 18.2f, p)
-} else if (kind == 1) {
-c.drawCircle(12f, 12f, 6f, p)
-c.drawLine(12f, 2f, 12f, 8f, p)
-c.drawLine(12f, 16f, 12f, 22f, p)
-c.drawLine(2f, 12f, 8f, 12f, p)
-c.drawLine(16f, 12f, 22f, 12f, p)
-p.style = Paint.Style.FILL
-c.drawCircle(12f, 12f, 1.3f, p)
-} else {
-c.drawLine(5f, 6f, 19f, 6f, p)
-c.drawLine(9f, 6f, 9f, 4f, p)
-c.drawLine(9f, 4f, 15f, 4f, p)
-c.drawLine(15f, 4f, 15f, 6f, p)
-c.drawLine(7f, 6f, 8f, 20f, p)
-c.drawLine(8f, 20f, 16f, 20f, p)
-c.drawLine(16f, 20f, 17f, 6f, p)
-c.drawLine(10f, 10f, 10f, 17f, p)
-c.drawLine(14f, 10f, 14f, 17f, p)
-}
-c.restore()
-}
-override fun setAlpha(alpha: Int) {
-p.alpha = alpha
-}
-override fun setColorFilter(colorFilter: ColorFilter?) {
-p.colorFilter = colorFilter
-}
-@Suppress("OVERRIDE_DEPRECATION")
-override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
