@@ -138,6 +138,29 @@ object ShizukuHelper {
         return "guardado en Películas/GameTurbo"
     }
 
+    // ---- Toques simulados para Edit Keymap ----
+    private val exec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile private var motionOk = true
+
+    fun touchDown(x: Int, y: Int) {
+        exec.execute {
+            if (motionOk) {
+                val r = runCommand("input motionevent DOWN $x $y")
+                if (r.isNotBlank()) motionOk = false
+            }
+        }
+    }
+
+    fun touchUp(x: Int, y: Int) {
+        exec.execute {
+            if (motionOk) {
+                runCommand("input motionevent UP $x $y")
+            } else {
+                runCommand("input tap $x $y")
+            }
+        }
+    }
+
     private val lock = Any()
     private var pendingBright = -1
     private var brightBusy = false
