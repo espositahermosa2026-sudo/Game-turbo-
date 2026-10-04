@@ -42,7 +42,7 @@ private var panelVisible = false
 private var mira: MiraManager? = null
 private var rotView: View? = null
 private var info: InfoManager? = null
-private var keymap: KeymapManager? = null
+private var macro: MacroManager? = null
 private var msgView: TextView? = null
 private val tealInt = AColor.parseColor("#1DE9B6")
 private val panelBg = AColor.parseColor("#D90B1412")
@@ -75,7 +75,7 @@ super.onCreate()
 windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 mira = MiraManager(this, windowManager)
 info = InfoManager(this, windowManager)
-keymap = KeymapManager(this, windowManager)
+macro = MacroManager(this, windowManager)
 showBubble()
 }
 private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -192,8 +192,8 @@ mira?.setVisible(newState)
 return
 }
 if (label == "Edit Keymap") {
-keymap?.setVisible(newState)
-msgView?.text = if (newState) "Keymap activo (mantén presionado para editar)" else "Keymap apagado"
+macro?.setVisible(newState)
+msgView?.text = if (newState) "Edit Keymap activo (mantén presionado para grabar)" else "Edit Keymap apagado"
 return
 }
 if (label == "Info real") {
@@ -307,7 +307,7 @@ toggleStates[label] = true
 circle.background = circleBg(true, s)
 icon.setColorFilter(tealInt)
 if (panelVisible) togglePanel()
-if (label == "Edit Keymap") keymap?.showEditor() else mira?.showMenu()
+if (label == "Edit Keymap") macro?.showEditor() else mira?.showMenu()
 true
 }
 }
@@ -474,7 +474,7 @@ handler.removeCallbacks(statsRunnable)
 ShizukuHelper.stopStats()
 mira?.destroy()
 info?.destroy()
-keymap?.destroy()
+macro?.destroy()
 rotView?.let { windowManager.removeView(it) }
 bubbleView?.let { windowManager.removeView(it) }
 if (panelVisible) panelView?.let { windowManager.removeView(it) }
