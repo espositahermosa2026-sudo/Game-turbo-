@@ -399,7 +399,7 @@ class GtDiamond(private val size: Int, color: Int) : Drawable() {
 }
 
 class KView(context: Context, private val marker: Boolean) : View(context) {
- var selected = false
+ var picked = false
  private val p = Paint(Paint.ANTI_ALIAS_FLAG)
 
  override fun onDraw(c: Canvas) {
@@ -410,7 +410,7 @@ class KView(context: Context, private val marker: Boolean) : View(context) {
   p.color = Color.parseColor(if (marker) "#44FF1744" else "#331DE9B6")
   c.drawCircle(cx, cy, r, p)
   p.style = Paint.Style.STROKE
-  p.strokeWidth = if (selected) 7f else 3f
+  p.strokeWidth = if (picked) 7f else 3f
   p.color = Color.parseColor(if (marker) "#FF1744" else "#1DE9B6")
   c.drawCircle(cx, cy, r, p)
   if (marker) {
@@ -486,8 +486,8 @@ class KeymapManager(private val ctx: Context, private val wm: WindowManager) {
  private fun select(i: Int) {
   sel = i
   keys.forEachIndexed { j, k ->
-   k.v?.selected = (j == i)
-   k.m?.selected = (j == i)
+   k.v?.picked = (j == i)
+   k.m?.picked = (j == i)
    k.v?.invalidate()
    k.m?.invalidate()
   }
