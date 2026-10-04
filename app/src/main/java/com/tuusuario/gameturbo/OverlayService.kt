@@ -72,6 +72,7 @@ handler.postDelayed(this, 1000)
 }
 }
 override fun onBind(intent: Intent?): IBinder? = null
+override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 override fun onCreate() {
 super.onCreate()
 windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
@@ -79,6 +80,9 @@ mira = MiraManager(this, windowManager)
 info = InfoManager(this, windowManager)
 km = KmManager(this, windowManager)
 showBubble()
+Thread {
+ShizukuHelper.runCommand("cmd appops set $packageName RUN_IN_BACKGROUND allow; cmd appops set $packageName RUN_ANY_IN_BACKGROUND allow; cmd deviceidle whitelist +$packageName; am set-standby-bucket $packageName active")
+}.start()
 }
 private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 private fun cmToPx(cm: Float): Int {
