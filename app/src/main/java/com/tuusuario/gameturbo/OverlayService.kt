@@ -44,6 +44,7 @@ private var mira: MiraManager? = null
 private var rotView: View? = null
 private var info: InfoManager? = null
 private var km: KmManager? = null
+private var apps: AppsManager? = null
 private var backView: View? = null
 private var msgView: TextView? = null
 private val tealInt = AColor.parseColor("#1DE9B6")
@@ -64,7 +65,7 @@ private val toggleLabels = setOf(
 )
 private val toggleStates = mutableMapOf<String, Boolean>()
 private val handler = Handler(Looper.getMainLooper())
-private var statsView: StatsView? = null
+private var statsView: HudStats? = null
 private val statsRunnable = object : Runnable {
 override fun run() {
 refreshStats()
@@ -79,6 +80,7 @@ windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 mira = MiraManager(this, windowManager)
 info = InfoManager(this, windowManager)
 km = KmManager(this, windowManager)
+apps = AppsManager(this, windowManager)
 showBubble()
 Thread {
 ShizukuHelper.runCommand("cmd appops set $packageName RUN_IN_BACKGROUND allow; cmd appops set $packageName RUN_ANY_IN_BACKGROUND allow; cmd deviceidle whitelist +$packageName; am set-standby-bucket $packageName active")
@@ -197,6 +199,11 @@ if (label == "Crosshair Assistant") {
 mira?.setVisible(newState)
 return
 }
+if (label == "Apps flotantes") {
+if (panelVisible) togglePanel()
+apps?.show()
+return
+}
 if (label == "Edit Keymap") {
 km?.setVisible(newState)
 msgView?.text = if (newState) "Edit Keymap activo (mantén presionado para editar)" else "Edit Keymap apagado"
@@ -290,7 +297,7 @@ gravity = Gravity.CENTER
 background = circleBg(startActive, s)
 }
 val icon = ImageView(this).apply {
-if (iconRes < 0) setImageDrawable(GtIcon(-iconRes)) else setImageResource(iconRes)
+if (iconRes == -5) setImageDrawable(WinIcon()) else if (iconRes < 0) setImageDrawable(GtIcon(-iconRes)) else setImageResource(iconRes)
 setColorFilter(if (startActive) tealInt else grayText)
 }
 val iconSize = (34f * s).toInt()
@@ -410,7 +417,7 @@ val (sw, sh) = screenSize()
 val panelW = if (sw > sh) (sw * HUD_WIDTH_FRACTION).toInt() else (sw * 0.96f).toInt()
 val s = panelW / 1280f
 val root = FrameLayout(this)
-val frame = View(this).apply { background = HudDrawable(panelBg, tealInt) }
+val frame = View(this).apply { background = HudFrame(panelBg, tealInt) }
 root.addView(frame, place(s, 0f, 0f, 1280f, 300f))
 val clock = TextClock(this).apply {
 format12Hour = "hh:mm a"
@@ -422,7 +429,7 @@ gravity = Gravity.CENTER
 setShadowLayer(4f, 0f, 0f, AColor.BLACK)
 }
 root.addView(clock, place(s, 440f, 2f, 400f, 28f))
-val stats = StatsView(this, s, tealInt, grayText)
+val stats = HudStats(this, s, tealInt, grayText)
 statsView = stats
 root.addView(stats, place(s, 440f, 64f, 400f, 156f))
 val leftItems = listOf(
@@ -436,7 +443,8 @@ val rightItems = listOf(
 -2 to "Limpiador de RAM",
 R.drawable.ic_gesture_off to "Bloq. gestos",
 R.drawable.ic_chart to "Info real",
-R.drawable.ic_record to "Grabar"
+R.drawable.ic_record to "Grabar",
+-5 to "Apps flotantes"
 )
 val leftCols = floatArrayOf(74f, 205f, 336f)
 val rightCols = floatArrayOf(944f, 1075f, 1206f)
@@ -503,145 +511,11 @@ ShizukuHelper.stopStats()
 mira?.destroy()
 info?.destroy()
 km?.destroy()
+apps?.destroy()
 setBackBlock(false)
 rotView?.let { windowManager.removeView(it) }
 bubbleView?.let { windowManager.removeView(it) }
 if (panelVisible) panelView?.let { windowManager.removeView(it) }
-}
-}
-class HudDrawable(fillColor: Int, strokeColor: Int) : Drawable() {
-private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = fillColor
-style = Paint.Style.FILL
-}
-private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = strokeColor
-style = Paint.Style.STROKE
-strokeWidth = 3f
-strokeJoin = Paint.Join.ROUND
-}
-private val path = Path().apply {
-moveTo(45f, 0f)
-lineTo(260f, 0f)
-lineTo(385f, 30f)
-lineTo(895f, 30f)
-lineTo(1020f, 0f)
-lineTo(1235f, 0f)
-lineTo(1280f, 45f)
-lineTo(1280f, 255f)
-lineTo(1235f, 300f)
-lineTo(1020f, 300f)
-lineTo(895f, 270f)
-lineTo(740f, 270f)
-lineTo(715f, 300f)
-lineTo(565f, 300f)
-lineTo(540f, 270f)
-lineTo(385f, 270f)
-lineTo(260f, 300f)
-lineTo(45f, 300f)
-lineTo(0f, 255f)
-lineTo(0f, 45f)
-close()
-}
-override fun draw(canvas: Canvas) {
-val unit = bounds.width() / 1280f
-val pad = 2f * unit
-val sw = (bounds.width() - 2 * pad) / 1280f
-val sh = (bounds.height() - 2 * pad) / 300f
-canvas.save()
-canvas.translate(bounds.left + pad, bounds.top + pad)
-canvas.scale(sw, sh)
-canvas.drawPath(path, fillPaint)
-canvas.drawPath(path, strokePaint)
-canvas.restore()
-}
-override fun setAlpha(alpha: Int) {
-fillPaint.alpha = alpha
-strokePaint.alpha = alpha
-}
-override fun setColorFilter(colorFilter: ColorFilter?) {
-fillPaint.colorFilter = colorFilter
-strokePaint.colorFilter = colorFilter
-}
-@Suppress("OVERRIDE_DEPRECATION")
-override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-}
-class StatsView(
-context: Context,
-private val s: Float,
-private val accent: Int,
-private val gray: Int
-) : View(context) {
-var ram = 0
-var fps = "--"
-var cpu = "--"
-private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = AColor.parseColor("#55000000")
-style = Paint.Style.FILL
-}
-private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = AColor.parseColor("#991DE9B6")
-style = Paint.Style.STROKE
-strokeWidth = 2f
-}
-private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = accent
-style = Paint.Style.FILL
-}
-private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = accent
-textSize = 32f
-typeface = Typeface.DEFAULT_BOLD
-textAlign = Paint.Align.CENTER
-}
-private val fpsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = AColor.WHITE
-textSize = 56f
-typeface = Typeface.DEFAULT_BOLD
-textAlign = Paint.Align.CENTER
-}
-private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-color = gray
-textSize = 20f
-textAlign = Paint.Align.CENTER
-}
-private val shape = Path().apply {
-moveTo(60f, 12f)
-lineTo(340f, 12f)
-lineTo(360f, 32f)
-lineTo(360f, 128f)
-lineTo(340f, 148f)
-lineTo(60f, 148f)
-lineTo(40f, 128f)
-lineTo(40f, 32f)
-close()
-}
-override fun onDraw(canvas: Canvas) {
-super.onDraw(canvas)
-canvas.save()
-canvas.scale(s, s)
-canvas.drawPath(shape, fillPaint)
-canvas.drawPath(shape, framePaint)
-val filledL = (ram * 7 / 100).coerceIn(0, 7)
-val cpuVal = cpu.toIntOrNull()
-val filledR = if (cpuVal != null) (cpuVal * 7 / 100).coerceIn(0, 7) else 0
-for (i in 0 until 7) {
-val t = (i - 3) / 3f
-val off = 12f * t * t
-val y = 8f + i * 20f
-val level = 6 - i
-barPaint.alpha = if (level < filledL) 255 else 70
-canvas.drawRoundRect(6f + off, y, 6f + off + 22f, y + 14f, 4f, 4f, barPaint)
-barPaint.alpha = if (level < filledR) 255 else 70
-canvas.drawRoundRect(372f - off - 22f, y, 372f - off, y + 14f, 4f, 4f, barPaint)
-}
-canvas.drawText("$ram%", 97f, 78f, valuePaint)
-canvas.drawText(fps, 200f, 84f, fpsPaint)
-canvas.drawText(if (cpu == "--") cpu else "$cpu%", 303f, 78f, valuePaint)
-canvas.drawText("RAM", 97f, 100f, labelPaint)
-canvas.drawText("FPS", 200f, 110f, labelPaint)
-canvas.drawText("CPU", 303f, 100f, labelPaint)
-canvas.restore()
 }
 }
 class BackBlock(context: Context) : View(context) {
