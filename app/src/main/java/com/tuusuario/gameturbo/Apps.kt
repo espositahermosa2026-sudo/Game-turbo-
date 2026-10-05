@@ -269,10 +269,11 @@ class AppsManager(private val ctx: Context, private val wm: WindowManager) {
       return
     }
     val (w, h) = screen()
-    val bh = h * 82 / 100
-    val bw = bh * 64 / 100
-    val bl = w * 53 / 100
-    val bt = h * 9 / 100
+    // Tamaño de la ventana flotante de Xiaomi (centrada), o el último tamaño que dejaste en esta app
+    val bw = w * 234 / 1000
+    val bh = h * 753 / 1000
+    val mine = prefs.getString("b_$pkg", null)?.split(",")?.mapNotNull { it.toIntOrNull() }
+    val box = if (mine != null && mine.size == 4) mine else listOf((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2)
     Thread {
       ShizukuHelper.runCommand("settings put global enable_freeform_support 1; settings put global force_resizable_activities 1")
       val r = ShizukuHelper.runCommand("am start -n $comp --windowingMode 5").trim()
@@ -282,14 +283,51 @@ class AppsManager(private val ctx: Context, private val wm: WindowManager) {
       )
       val id = Regex("""u\d+ ${Regex.escape(pkg)}/\S+ t(\d+)""").find(out)?.groupValues?.get(1)
       if (id != null) {
-        ShizukuHelper.runCommand("am task resize $id $bl $bt ${bl + bw} ${bt + bh}")
+        ShizukuHelper.runCommand("am task resize $id ${box[0]} ${box[1]} ${box[2]} ${box[3]}")
         flash("Ventana flotante abierta")
+        watch(pkg)
       } else if (r.contains("Error") || r.contains("Warning")) {
         flash(r.lines().first().take(80))
       } else {
         flash("Abierta, pero no pude ajustar la ventana")
       }
     }.start()
+  }
+
+  // Lee el tamaño actual de la ventana flotante de una app (null si no está flotando)
+  private fun readBounds(pkg: String): List<Int>? {
+    val lines = ShizukuHelper.runCommand("dumpsys activity activities").lines()
+    val i = lines.indexOfFirst { it.contains("Task{") && it.contains(":$pkg ") }
+    if (i < 0) return null
+    val re = Regex("""mBounds=Rect\((\d+), (\d+) - (\d+), (\d+)\)""")
+    var free = false
+    var b: List<Int>? = null
+    for (k in i + 1 until minOf(lines.size, i + 80)) {
+      val l = lines[k]
+      if (l.contains("Task{")) break
+      if (l.contains("mWindowingMode=freeform")) free = true
+      if (b == null) {
+        val m = re.find(l)
+        if (m != null) b = m.groupValues.drop(1).map { it.toInt() }
+      }
+    }
+    return if (free) b else null
+  }
+
+  // Mientras la ventana siga abierta, guarda el tamaño que le vas dejando
+  private fun watch(pkg: String) {
+    var misses = 0
+    for (n in 0 until 60) {
+      Thread.sleep(5000)
+      val b = readBounds(pkg)
+      if (b == null) {
+        misses++
+        if (misses >= 2) return
+      } else {
+        misses = 0
+        prefs.edit().putString("b_$pkg", b.joinToString(",")).apply()
+      }
+    }
   }
 
   private fun addApp(pkg: String) {
