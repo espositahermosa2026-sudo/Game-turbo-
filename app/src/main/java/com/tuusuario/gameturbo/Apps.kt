@@ -269,6 +269,10 @@ class AppsManager(private val ctx: Context, private val wm: WindowManager) {
       return
     }
     val (w, h) = screen()
+    val bh = h * 82 / 100
+    val bw = bh * 64 / 100
+    val bl = w * 53 / 100
+    val bt = h * 9 / 100
     Thread {
       ShizukuHelper.runCommand("settings put global enable_freeform_support 1; settings put global force_resizable_activities 1")
       val r = ShizukuHelper.runCommand("am start -n $comp --windowingMode 5").trim()
@@ -278,7 +282,7 @@ class AppsManager(private val ctx: Context, private val wm: WindowManager) {
       )
       val id = Regex("""u\d+ ${Regex.escape(pkg)}/\S+ t(\d+)""").find(out)?.groupValues?.get(1)
       if (id != null) {
-        ShizukuHelper.runCommand("am task resize $id ${w * 28 / 100} ${h * 6 / 100} ${w * 72 / 100} ${h * 55 / 100}")
+        ShizukuHelper.runCommand("am task resize $id $bl $bt ${bl + bw} ${bt + bh}")
         flash("Ventana flotante abierta")
       } else if (r.contains("Error") || r.contains("Warning")) {
         flash(r.lines().first().take(80))
