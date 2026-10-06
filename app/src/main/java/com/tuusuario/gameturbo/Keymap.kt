@@ -1,11 +1,7 @@
 package com.tuusuario.gameturbo
 
 import android.content.Context
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.DashPathEffect
-import android.graphics.Path
-import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -20,109 +16,17 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 
-class KmTarget(var x: Int, var y: Int, var delay: Long) {
- var v: KmView? = null
+class KmTarget(var x: Int, var y: Int, var type: Int, var interval: Int, var duration: Int) {
+ var v: KmCircle? = null
  var p: WindowManager.LayoutParams? = null
 }
 
-class KmTrigger(var x: Int, var y: Int, var size: Int, var mode: Int) {
+class KmTrigger(var x: Int, var y: Int, var size: Int, var block: Boolean) {
  val targets = ArrayList<KmTarget>()
- var v: KmView? = null
+ var v: KmCircle? = null
  var p: WindowManager.LayoutParams? = null
  @Volatile var busy = false
  @Volatile var holding = false
-}
-
-class KmView(context: Context, private val kind: Int, private val d: Float) : View(context) {
- var title = ""
- var sub = ""
- var picked = false
- var quiet = false
- private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-
- override fun onDraw(c: Canvas) {
-  if (quiet) return
-  val cx = width / 2f
-  val cy = height / 2f
-  val r = minOf(cx, cy) - 4f
-  p.style = Paint.Style.FILL
-  p.color = Color.parseColor(if (kind == 0) (if (quiet) "#221DE9B6" else "#551DE9B6") else "#77000000")
-  c.drawCircle(cx, cy, r, p)
-  p.style = Paint.Style.STROKE
-  p.strokeWidth = if (picked) 6f else 3f
-  p.color = Color.parseColor(if (kind == 0) "#1DE9B6" else "#FFFFFF")
-  c.drawCircle(cx, cy, r, p)
-  if (!quiet) {
-   p.style = Paint.Style.FILL
-   p.color = Color.WHITE
-   p.textAlign = Paint.Align.CENTER
-   p.textSize = (if (kind == 0) 14f else 10f) * d
-   c.drawText(title, cx, if (sub.isEmpty()) cy + 5f * d else cy - 1f * d, p)
-   if (sub.isNotEmpty()) {
-    p.textSize = 9f * d
-    c.drawText(sub, cx, cy + 11f * d, p)
-   }
-  }
- }
-}
-
-class KmGuide(context: Context) : View(context) {
- var gx = -1f
- var gy = -1f
- private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-  color = Color.WHITE
-  style = Paint.Style.STROKE
-  strokeWidth = 2f
-  pathEffect = DashPathEffect(floatArrayOf(18f, 12f), 0f)
- }
-
- override fun onDraw(c: Canvas) {
-  if (gx < 0f) return
-  c.drawLine(gx, 0f, gx, height.toFloat(), p)
-  c.drawLine(0f, gy, width.toFloat(), gy, p)
- }
-}
-
-class KmArrow(context: Context, private val dir: Int, private val d: Float) : View(context) {
- private val p = Paint(Paint.ANTI_ALIAS_FLAG)
- private val path = Path()
-
- override fun onDraw(c: Canvas) {
-  val w = width.toFloat()
-  val h = height.toFloat()
-  p.style = Paint.Style.FILL
-  p.color = Color.parseColor("#CC1B5E50")
-  c.drawRoundRect(0f, 0f, w, h, 10f * d, 10f * d, p)
-  p.color = Color.parseColor("#1DE9B6")
-  val cx = w / 2f
-  val cy = h / 2f
-  val s = 9f * d
-  path.reset()
-  when (dir) {
-   0 -> {
-    path.moveTo(cx, cy - s)
-    path.lineTo(cx - s, cy + s * 0.7f)
-    path.lineTo(cx + s, cy + s * 0.7f)
-   }
-   1 -> {
-    path.moveTo(cx, cy + s)
-    path.lineTo(cx - s, cy - s * 0.7f)
-    path.lineTo(cx + s, cy - s * 0.7f)
-   }
-   2 -> {
-    path.moveTo(cx - s, cy)
-    path.lineTo(cx + s * 0.7f, cy - s)
-    path.lineTo(cx + s * 0.7f, cy + s)
-   }
-   else -> {
-    path.moveTo(cx + s, cy)
-    path.lineTo(cx - s * 0.7f, cy - s)
-    path.lineTo(cx - s * 0.7f, cy + s)
-   }
-  }
-  path.close()
-  c.drawPath(path, p)
- }
 }
 
 class KmManager(private val ctx: Context, private val wm: WindowManager) {
@@ -130,14 +34,14 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  private val prefs = ctx.getSharedPreferences("km", Context.MODE_PRIVATE)
  private val hd = Handler(Looper.getMainLooper())
  private val trigs = ArrayList<KmTrigger>()
- private val delays = longArrayOf(0L, 100L, 250L, 500L, 1000L)
- private val modes = arrayOf("Toque", "Mantener", "Repetir")
+ private val typeNames = arrayOf("Toque", "Repetir", "Doble", "Soltar")
  private val ts = (56 * d).toInt()
+ private val settings = KmSettings(ctx, wm)
  private var shown = false
  private var editing = false
  private var selT = -1
  private var selK = -1
- private var guide: KmGuide? = null
+ private var guide: KmLines? = null
  private var bar: View? = null
  private var panel: View? = null
  private var nameBtn: TextView? = null
@@ -155,17 +59,19 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
    val parts = blk.split(";")
    val h = parts[0].split(",").mapNotNull { it.toIntOrNull() }
    if (h.size != 4) continue
-   val t = KmTrigger(h[0], h[1], h[2], h[3])
+   val t = KmTrigger(h[0], h[1], h[2], h[3] != 0)
    for (i in 1 until parts.size) {
-    val g = parts[i].split(",").mapNotNull { it.toLongOrNull() }
-    if (g.size == 3) t.targets.add(KmTarget(g[0].toInt(), g[1].toInt(), g[2]))
+    val g = parts[i].split(",").mapNotNull { it.toIntOrNull() }
+    if (g.size == 5) t.targets.add(KmTarget(g[0], g[1], g[2].coerceIn(0, 3), g[3], g[4]))
+    if (g.size == 3) t.targets.add(KmTarget(g[0], g[1], 0, 50, 70))
    }
    trigs.add(t)
   }
  }
 
  private fun serialize(): String = trigs.joinToString("|") { t ->
-  "${t.x},${t.y},${t.size},${t.mode}" + t.targets.joinToString("") { ";${it.x},${it.y},${it.delay}" }
+  "${t.x},${t.y},${t.size},${if (t.block) 1 else 0}" +
+   t.targets.joinToString("") { ";${it.x},${it.y},${it.type},${it.interval},${it.duration}" }
  }
 
  private fun save() {
@@ -203,22 +109,40 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  }
 
  // ---------- ejecutar ----------
+ private fun tap(g: KmTarget) {
+  ShizukuHelper.runCommand("input swipe ${g.x} ${g.y} ${g.x} ${g.y} ${g.duration}")
+ }
+
  private fun press(t: KmTrigger, down: Boolean) {
-  val first = t.targets.firstOrNull() ?: return
-  if (t.mode == 1) {
-   if (down) ShizukuHelper.touchDown(first.x, first.y) else ShizukuHelper.touchUp(first.x, first.y)
-   return
-  }
   t.holding = down
-  if (!down || t.busy) return
+  if (!down || t.busy || t.targets.isEmpty()) return
   t.busy = true
   Thread {
-   do {
-    for (g in t.targets.toList()) {
-     if (g.delay > 0L) Thread.sleep(g.delay)
-     ShizukuHelper.runCommand("input swipe ${g.x} ${g.y} ${g.x} ${g.y} 40")
+   val all = t.targets.toList()
+   for (g in all) {
+    if (g.type == 0) {
+     tap(g)
+    } else if (g.type == 2) {
+     tap(g)
+     Thread.sleep(60)
+     tap(g)
     }
-   } while (t.mode == 2 && t.holding)
+   }
+   val reps = all.filter { it.type == 1 }
+   while (t.holding) {
+    if (reps.isEmpty()) {
+     Thread.sleep(10)
+    } else {
+     for (g in reps) {
+      if (!t.holding) break
+      tap(g)
+      Thread.sleep(g.interval.toLong())
+     }
+    }
+   }
+   for (g in all) {
+    if (g.type == 3) tap(g)
+   }
    t.busy = false
   }.start()
  }
@@ -226,7 +150,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  // ---------- ventanas ----------
  private fun addTrigger(i: Int) {
   val t = trigs[i]
-  val v = KmView(ctx, 0, d)
+  val v = KmCircle(ctx, 0, d)
   v.title = "Trigger" + (i + 1)
   v.quiet = !editing
   val p = lp(t.x, t.y, t.size, true)
@@ -234,6 +158,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
   var iy = 0
   var tx = 0f
   var ty = 0f
+  var down = false
   v.setOnTouchListener { _, e ->
    if (editing) {
     when (e.action) {
@@ -255,8 +180,23 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
     }
    } else {
     when (e.action) {
-     MotionEvent.ACTION_DOWN -> press(t, true)
-     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> press(t, false)
+     MotionEvent.ACTION_DOWN -> {
+      down = true
+      press(t, true)
+     }
+     MotionEvent.ACTION_MOVE -> {
+      val m = dp(12)
+      if (down && t.block && (e.x < -m || e.y < -m || e.x > v.width + m || e.y > v.height + m)) {
+       down = false
+       press(t, false)
+      }
+     }
+     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+      if (down) {
+       down = false
+       press(t, false)
+      }
+     }
     }
    }
    true
@@ -268,7 +208,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
 
  private fun addTarget(i: Int, k: Int) {
   val g = trigs[i].targets[k]
-  val v = KmView(ctx, 1, d)
+  val v = KmCircle(ctx, 1, d)
   v.title = "Target" + (k + 1)
   v.sub = "${g.x},${g.y}"
   val p = lp(g.x, g.y, ts, true)
@@ -374,8 +314,8 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
   val g = t?.targets?.getOrNull(selK)
   nameBtn?.text = when {
    t == null -> "-"
-   g != null -> "Target" + (selK + 1) + " · " + g.delay + "ms"
-   else -> "Trigger" + (selT + 1) + " · " + modes[t.mode]
+   g != null -> "Target" + (selK + 1) + " · " + typeNames[g.type]
+   else -> "Trigger" + (selT + 1)
   }
   seek?.progress = if (t == null) 0 else (t.size - dp(40)) * 100 / dp(100)
  }
@@ -444,8 +384,8 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
 
  private fun cmdAddTrigger() {
   val (w, h) = screen()
-  val t = KmTrigger(w / 2 - dp(150), h / 2, dp(72), 0)
-  t.targets.add(KmTarget(w / 2 + dp(120), h / 2, 0L))
+  val t = KmTrigger(w / 2 - dp(150), h / 2, dp(72), true)
+  t.targets.add(KmTarget(w / 2 + dp(120), h / 2, 0, 50, 70))
   trigs.add(t)
   buildAll()
   pick(trigs.size - 1, -1)
@@ -460,29 +400,30 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
   val t = trigs[i]
   val (w, h) = screen()
   val n = t.targets.size
-  t.targets.add(KmTarget(w / 2 + dp(120) + n * dp(30), h / 2 + (n + 1) * dp(40), 0L))
+  t.targets.add(KmTarget(w / 2 + dp(120) + n * dp(30), h / 2 + (n + 1) * dp(40), 0, 50, 70))
   buildAll()
   pick(i, t.targets.size - 1)
  }
 
+ private fun deleteTarget(ti: Int, k: Int) {
+  val t = trigs.getOrNull(ti) ?: return
+  clearViews()
+  if (k in t.targets.indices) t.targets.removeAt(k)
+  buildAll()
+  pick(ti, -1)
+ }
+
  private fun cmdTrash() {
   val t = trigs.getOrNull(selT) ?: return
+  if (selK in t.targets.indices) {
+   deleteTarget(selT, selK)
+   return
+  }
   clearViews()
-  if (selK in t.targets.indices) t.targets.removeAt(selK) else trigs.removeAt(selT)
+  trigs.removeAt(selT)
   if (selT >= trigs.size) selT = trigs.size - 1
   buildAll()
   pick(selT, -1)
- }
-
- private fun cmdGear() {
-  val t = trigs.getOrNull(selT) ?: return
-  val g = t.targets.getOrNull(selK)
-  if (g != null) {
-   g.delay = delays[(delays.indexOf(g.delay) + 1) % delays.size]
-  } else {
-   t.mode = (t.mode + 1) % 3
-  }
-  refreshName()
  }
 
  private fun cmdCycle() {
@@ -494,6 +435,49 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
   if (all.isEmpty()) return
   val n = all[(all.indexOf(Pair(selT, selK)) + 1) % all.size]
   pick(n.first, n.second)
+ }
+
+ // ---------- ajustes (panel de la derecha) ----------
+ private fun openSettings() {
+  val t = trigs.getOrNull(selT) ?: return
+  if (selK in t.targets.indices) showTargetSettings(selT, selK) else showTriggerSettings(selT)
+ }
+
+ private fun showTriggerSettings(ti: Int) {
+  val t = trigs.getOrNull(ti) ?: return
+  pick(ti, -1)
+  val rows = t.targets.mapIndexed { k, g ->
+   Pair("Target " + (k + 1), "x=${g.x}  y=${g.y} | ${typeNames[g.type]}")
+  }
+  settings.showTrigger(
+   "Ajustes del Trigger " + (ti + 1), t.block, rows,
+   { on -> t.block = on },
+   {
+    selT = ti
+    cmdAddTarget()
+    showTriggerSettings(ti)
+   },
+   { k -> showTargetSettings(ti, k) },
+   { k ->
+    deleteTarget(ti, k)
+    showTriggerSettings(ti)
+   }
+  )
+ }
+
+ private fun showTargetSettings(ti: Int, ki: Int) {
+  val g = trigs.getOrNull(ti)?.targets?.getOrNull(ki) ?: return
+  pick(ti, ki)
+  settings.showTarget(
+   "Ajustes del Target " + (ki + 1), g.type, g.interval, g.duration,
+   { type, interval, duration ->
+    g.type = type
+    g.interval = interval
+    g.duration = duration
+    showTriggerSettings(ti)
+   },
+   { showTriggerSettings(ti) }
+  )
  }
 
  // ---------- botones ----------
@@ -519,7 +503,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  }
 
  private fun arrow(dir: Int, dx: Int, dy: Int): View {
-  val b = KmArrow(ctx, dir, d)
+  val b = KmPad(ctx, dir, d)
   val run = object : Runnable {
    override fun run() {
     nudge(dx, dy)
@@ -560,7 +544,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
 
  private fun buildEditorUi() {
   val (w, h) = screen()
-  val g = KmGuide(ctx)
+  val g = KmLines(ctx)
   val gp = WindowManager.LayoutParams(
    w, h, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
@@ -589,7 +573,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
   val row1 = box(true)
   put(row1, nb)
   put(row1, tb("🗑") { cmdTrash() })
-  put(row1, tb("⚙") { cmdGear() })
+  put(row1, tb("⚙") { openSettings() })
 
   val sk = SeekBar(ctx)
   sk.max = 100
@@ -676,6 +660,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
 
  private fun closeEditor() {
   editing = false
+  settings.close()
   for (v in listOf(bar, panel, guide)) {
    v?.let { try { wm.removeView(it) } catch (e: Exception) { } }
   }
