@@ -178,6 +178,126 @@ object ShizukuHelper {
         }
     }
 
+    // ---- Toque multitáctil: escribe en el dispositivo de la pantalla táctil como un dedo más ----
+    private var tDev = ""
+    private var tMaxX = 0
+    private var tMaxY = 0
+    private var tSlot = 9
+    private var tMajor = false
+    private var tPress = false
+    private var tReady = false
+    private var tTried = false
+    private var tid = 2000
+
+    private fun initTouch() {
+        if (tTried) return
+        tTried = true
+        var dev = ""
+        var maxX = 0
+        var maxY = 0
+        var slot = 9
+        var major = false
+        var press = false
+        var direct = false
+        var hasX = false
+        fun commit() {
+            if (hasX && direct && dev.isNotEmpty() && !tReady) {
+                tDev = dev
+                tMaxX = maxX
+                tMaxY = maxY
+                tSlot = slot
+                tMajor = major
+                tPress = press
+                tReady = true
+            }
+        }
+        val axis = Regex("""^(?:ABS \(0003\):\s*)?([0-9a-fA-F]{4})\s*:\s*value.*?max (\d+)""")
+        for (raw in runCommand("getevent -p").lines()) {
+            val l = raw.trim()
+            if (l.startsWith("add device")) {
+                commit()
+                dev = l.substringAfter(": ").trim()
+                maxX = 0
+                maxY = 0
+                slot = 9
+                major = false
+                press = false
+                direct = false
+                hasX = false
+            } else if (l.contains("INPUT_PROP_DIRECT")) {
+                direct = true
+            } else {
+                val m = axis.find(l)
+                if (m != null) {
+                    val mx = m.groupValues[2].toIntOrNull() ?: 0
+                    when (m.groupValues[1].lowercase()) {
+                        "0035" -> {
+                            hasX = true
+                            maxX = mx
+                        }
+                        "0036" -> maxY = mx
+                        "002f" -> slot = mx
+                        "0030" -> major = true
+                        "003a" -> press = true
+                    }
+                }
+            }
+        }
+        commit()
+    }
+
+    // Toca en (sx, sy) de la pantalla sin cortar los dedos que ya estén tocando. Devuelve false si no se pudo.
+    fun rawTap(sx: Int, sy: Int, ms: Int, w: Int, h: Int, rot: Int): Boolean {
+        initTouch()
+        if (!tReady) return false
+        val land = rot == 1 || rot == 3
+        val wn = if (land) h else w
+        val hn = if (land) w else h
+        val nx: Int
+        val ny: Int
+        when (rot) {
+            1 -> {
+                nx = wn - 1 - sy
+                ny = sx
+            }
+            2 -> {
+                nx = wn - 1 - sx
+                ny = hn - 1 - sy
+            }
+            3 -> {
+                nx = sy
+                ny = hn - 1 - sx
+            }
+            else -> {
+                nx = sx
+                ny = sy
+            }
+        }
+        val rx = (nx.toLong() * (tMaxX + 1) / wn).toInt().coerceIn(0, tMaxX)
+        val ry = (ny.toLong() * (tMaxY + 1) / hn).toInt().coerceIn(0, tMaxY)
+        val slot = minOf(tSlot, 9)
+        tid = if (tid > 60000) 2000 else tid + 1
+        val e = "sendevent $tDev"
+        val sb = StringBuilder()
+        sb.append("$e 3 47 $slot; $e 3 57 $tid; $e 3 53 $rx; $e 3 54 $ry; ")
+        if (tMajor) sb.append("$e 3 48 6; ")
+        if (tPress) sb.append("$e 3 58 60; ")
+        sb.append("$e 0 0 0; sleep ${String.format(java.util.Locale.US, "%.3f", ms / 1000.0)}; ")
+        sb.append("$e 3 47 $slot; $e 3 57 -1; $e 0 0 0")
+        val out = runCommand("( $sb ) 2>&1")
+        if (out.isNotBlank()) {
+            tReady = false
+            return false
+        }
+        return true
+    }
+
+    fun rawRelease() {
+        if (!tReady) return
+        val e = "sendevent $tDev"
+        runCommand("( $e 3 47 ${minOf(tSlot, 9)}; $e 3 57 -1; $e 0 0 0 ) 2>&1")
+    }
+
     private val lock = Any()
     private var pendingBright = -1
     private var brightBusy = false
