@@ -25,10 +25,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -39,15 +44,17 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.Random
 
 val BgDark = Color(0xFF0A0A0F)
 val VioletNeon = Color(0xFF9D4EDD)
 val VioletDeep = Color(0xFF5A189A)
 
-val PanelFill = Color(0xFF0E3540)
-val PanelBorder = Color(0xFF1D8FA3)
-val RowHighlight = Color(0xFF14566A)
-val IconTint = Color(0xFF7FE3F0)
+val PanelFill = Color(0xFF1A0B33)
+val PanelBorder = Color(0xFFB04DFF)
+val RowHighlight = Color(0xFF6A32B8)
+val IconTint = Color(0xFFD6A5FF)
+val SoftText = Color(0xFFB9A8D9)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,13 +97,39 @@ fun batteryPercent(context: Context): Int {
 
 fun nowText(): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
 
+// Líneas tipo circuito en el fondo
+fun Modifier.circuit(): Modifier = this.drawBehind {
+    val rnd = Random(11)
+    val line = Color(0x33B04DFF)
+    for (i in 0 until 28) {
+        var x = rnd.nextFloat() * size.width
+        var y = rnd.nextFloat() * size.height
+        for (s in 0 until 4) {
+            val len = 40f + rnd.nextFloat() * 160f
+            var nx = x
+            var ny = y
+            when (rnd.nextInt(3)) {
+                0 -> nx = x + len
+                1 -> ny = y + len
+                else -> {
+                    nx = x + len * 0.7f
+                    ny = y + len * 0.7f
+                }
+            }
+            drawLine(line, Offset(x, y), Offset(nx, ny), strokeWidth = 2f)
+            x = nx
+            y = ny
+        }
+    }
+}
+
 @Composable
 fun PanelButton(modifier: Modifier = Modifier, onClick: () -> Unit, content: @Composable () -> Unit) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(PanelFill)
-            .border(1.5.dp, PanelBorder, RoundedCornerShape(10.dp))
+            .border(2.dp, PanelBorder, RoundedCornerShape(12.dp))
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
@@ -112,9 +145,10 @@ fun GameRow(name: String, icon: Drawable, selected: Boolean, onClick: () -> Unit
             .fillMaxWidth()
             .height(if (selected) 84.dp else 72.dp)
             .then(
-                if (selected) Modifier.background(
-                    Brush.horizontalGradient(listOf(RowHighlight, Color.Transparent))
-                ) else Modifier
+                if (selected) Modifier
+                    .background(Brush.horizontalGradient(listOf(Color(0xCC6A32B8), Color.Transparent)))
+                    .border(1.5.dp, Brush.horizontalGradient(listOf(PanelBorder, Color.Transparent)), RectangleShape)
+                else Modifier
             )
             .clickable { onClick() }
             .padding(start = if (selected) 20.dp else 28.dp, end = 12.dp),
@@ -126,12 +160,12 @@ fun GameRow(name: String, icon: Drawable, selected: Boolean, onClick: () -> Unit
             modifier = Modifier
                 .size(if (selected) 56.dp else 44.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .alpha(if (selected) 1f else 0.55f)
+                .alpha(if (selected) 1f else 0.6f)
         )
         Spacer(Modifier.width(16.dp))
         Text(
             name,
-            color = if (selected) Color.White else Color(0xFF8A9498),
+            color = if (selected) Color.White else SoftText,
             fontSize = if (selected) 20.sp else 16.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             maxLines = 2
@@ -162,7 +196,8 @@ fun MainScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0B1316), Color(0xFF111C20))))
+            .background(Brush.verticalGradient(listOf(Color(0xFF0B0716), Color(0xFF1A0B33))))
+            .circuit()
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
             Column(modifier = Modifier.weight(0.5f).fillMaxHeight()) {
@@ -176,7 +211,8 @@ fun MainScreen() {
                         fontSize = 30.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 3.sp
+                        letterSpacing = 3.sp,
+                        style = TextStyle(shadow = Shadow(color = PanelBorder, blurRadius = 28f))
                     )
                     Spacer(Modifier.width(18.dp))
                     Text(
@@ -189,8 +225,9 @@ fun MainScreen() {
                     Spacer(Modifier.width(12.dp))
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(Color(0xFF3FA32F))
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF8E44D6))
+                            .border(1.dp, IconTint, RoundedCornerShape(4.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text("$battery%", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -199,7 +236,7 @@ fun MainScreen() {
                 if (games.isEmpty()) {
                     Text(
                         "No se detectaron juegos instalados",
-                        color = Color.Gray,
+                        color = SoftText,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(start = 28.dp, top = 16.dp)
                     )
@@ -226,7 +263,8 @@ fun MainScreen() {
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.End,
-                    maxLines = 2
+                    maxLines = 2,
+                    style = TextStyle(shadow = Shadow(color = PanelBorder, blurRadius = 20f))
                 )
                 Spacer(Modifier.height(16.dp))
                 PanelButton(
@@ -244,7 +282,7 @@ fun MainScreen() {
                         ) {
                             Text("■", color = IconTint, fontSize = 26.sp)
                         }
-                        Text("Detener", color = Color(0xFF8A9498), fontSize = 11.sp)
+                        Text("Detener", color = SoftText, fontSize = 11.sp)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         PanelButton(
@@ -253,7 +291,7 @@ fun MainScreen() {
                         ) {
                             Text("⟳", color = IconTint, fontSize = 28.sp)
                         }
-                        Text("Actualizar", color = Color(0xFF8A9498), fontSize = 11.sp)
+                        Text("Actualizar", color = SoftText, fontSize = 11.sp)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         PanelButton(
@@ -262,7 +300,7 @@ fun MainScreen() {
                         ) {
                             Text("⚙", color = IconTint, fontSize = 26.sp)
                         }
-                        Text("Permiso", color = Color(0xFF8A9498), fontSize = 11.sp)
+                        Text("Permiso", color = SoftText, fontSize = 11.sp)
                     }
                 }
             }
