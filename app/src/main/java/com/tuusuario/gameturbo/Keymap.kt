@@ -49,6 +49,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  private var snapshot = ""
  private var panelLp: WindowManager.LayoutParams? = null
  private var panelTop = true
+ private var multi = prefs.getBoolean("multi", true)
 
  private fun dp(v: Int): Int = (v * d).toInt()
 
@@ -98,6 +99,7 @@ private fun loadSaved() {
  private fun lp(cx: Int, cy: Int, size: Int, touch: Boolean): WindowManager.LayoutParams {
   var f = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+   WindowManager.LayoutParams.FLAG_SPLIT_TOUCH or
    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
   if (!touch) f = f or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
   val p = WindowManager.LayoutParams(
@@ -114,8 +116,16 @@ private fun loadSaved() {
  }
 
  // ---------- ejecutar ----------
+ @Suppress("DEPRECATION")
+ private fun rotation(): Int = wm.defaultDisplay.rotation
+
  private fun tap(g: KmTarget) {
-  ShizukuHelper.runCommand("input swipe ${g.x} ${g.y} ${g.x} ${g.y} ${maxOf(1, g.duration / 10)}")
+  val ms = maxOf(1, g.duration / 10)
+  if (multi) {
+   val (w, h) = screen()
+   if (ShizukuHelper.rawTap(g.x, g.y, ms, w, h, rotation())) return
+  }
+  ShizukuHelper.runCommand("input swipe ${g.x} ${g.y} ${g.x} ${g.y} $ms")
  }
 
  private fun press(t: KmTrigger, down: Boolean) {
@@ -466,6 +476,11 @@ private fun loadSaved() {
    { k ->
     deleteTarget(ti, k)
     showTriggerSettings(ti)
+   },
+   multi,
+   { on ->
+    multi = on
+    prefs.edit().putBoolean("multi", on).apply()
    }
   )
  }
@@ -640,6 +655,7 @@ private fun loadSaved() {
    }
   } else {
    if (editing) done()
+   Thread { ShizukuHelper.rawRelease() }.start()
    clearViews()
    shown = false
   }
