@@ -288,21 +288,23 @@ class KmSettings(private val ctx: Context, private val wm: WindowManager) {
     paintSeg()
     c.addView(seg)
 
+    fun fmt(v: Int): String = if (v % 10 == 0) "${v / 10} ms" else "${v / 10}.${v % 10} ms"
     fun slider(label: String, start: Int, onChange: (Int) -> Unit) {
       val head = lin(true)
       head.addView(tv(label, 16f, Color.WHITE), LinearLayout.LayoutParams(0, -2, 1f))
-      val vt = tv("$start ms", 16f, Color.WHITE, true)
+      val vt = tv(fmt(start.coerceIn(1, 10000)), 16f, Color.WHITE, true)
       head.addView(vt)
       c.addView(head)
       val sk = SeekBar(ctx)
-      sk.max = 99
-      sk.progress = (start.coerceIn(10, 1000) - 10) / 10
+      sk.max = 9999
+      sk.progress = start.coerceIn(1, 10000) - 1
       fun apply(p: Int) {
-        val q = p.coerceIn(0, 99)
+        val q = p.coerceIn(0, 9999)
         sk.progress = q
-        vt.text = (10 + q * 10).toString() + " ms"
-        onChange(10 + q * 10)
+        vt.text = fmt(q + 1)
+        onChange(q + 1)
       }
+      fun step(v: Int): Int = if (v < 100) 1 else if (v < 1000) 10 else 100
       sk.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
         override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
           if (fromUser) apply(p)
@@ -312,14 +314,14 @@ class KmSettings(private val ctx: Context, private val wm: WindowManager) {
       })
       val row = lin(true)
       row.setPadding(0, dp(4), 0, dp(10))
-      row.addView(btn("−") { apply(sk.progress - 1) })
+      row.addView(btn("−") { apply(sk.progress - step(sk.progress)) })
       row.addView(sk, LinearLayout.LayoutParams(0, -2, 1f))
-      row.addView(btn("＋") { apply(sk.progress + 1) })
+      row.addView(btn("＋") { apply(sk.progress + step(sk.progress + 1)) })
       c.addView(row)
     }
     slider("Intervalo de toque:", interval) { interval = it }
     slider("Duración del toque:", duration) { duration = it }
-    c.addView(tv("Rango: de 10 ms a 1000 ms", 13f, teal))
+    c.addView(tv("Rango: de 0.1 ms a 1000 ms", 13f, teal))
 
     val spacer = View(ctx)
     c.addView(spacer, LinearLayout.LayoutParams(-1, 0, 1f))
