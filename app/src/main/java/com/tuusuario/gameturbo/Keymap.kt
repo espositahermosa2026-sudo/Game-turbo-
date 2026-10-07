@@ -53,7 +53,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  private fun dp(v: Int): Int = (v * d).toInt()
 
  // ---------- datos ----------
- private fun load(raw: String) {
+ private fun load(raw: String, mul: Int = 1) {
   trigs.clear()
   for (blk in raw.split("|")) {
    val parts = blk.split(";")
@@ -62,12 +62,17 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
    val t = KmTrigger(h[0], h[1], h[2], h[3] != 0)
    for (i in 1 until parts.size) {
     val g = parts[i].split(",").mapNotNull { it.toIntOrNull() }
-    if (g.size == 5) t.targets.add(KmTarget(g[0], g[1], g[2].coerceIn(0, 3), g[3], g[4]))
-    if (g.size == 3) t.targets.add(KmTarget(g[0], g[1], 0, 50, 70))
+    if (g.size == 5) t.targets.add(KmTarget(g[0], g[1], g[2].coerceIn(0, 3), g[3] * mul, g[4] * mul))
+    if (g.size == 3) t.targets.add(KmTarget(g[0], g[1], 0, 500, 700))
    }
    trigs.add(t)
   }
  }
+
+private fun loadSaved() {
+ val d2 = prefs.getString("data2", null)
+ if (d2 != null) load(d2) else load(prefs.getString("data", "") ?: "", 10)
+}
 
  private fun serialize(): String = trigs.joinToString("|") { t ->
   "${t.x},${t.y},${t.size},${if (t.block) 1 else 0}" +
@@ -75,7 +80,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  }
 
  private fun save() {
-  prefs.edit().putString("data", serialize()).apply()
+  prefs.edit().putString("data2", serialize()).apply()
  }
 
  @Suppress("DEPRECATION")
@@ -110,7 +115,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
 
  // ---------- ejecutar ----------
  private fun tap(g: KmTarget) {
-  ShizukuHelper.runCommand("input swipe ${g.x} ${g.y} ${g.x} ${g.y} ${g.duration}")
+  ShizukuHelper.runCommand("input swipe ${g.x} ${g.y} ${g.x} ${g.y} ${maxOf(1, g.duration / 10)}")
  }
 
  private fun press(t: KmTrigger, down: Boolean) {
@@ -136,7 +141,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
      for (g in reps) {
       if (!t.holding) break
       tap(g)
-      Thread.sleep(g.interval.toLong())
+      Thread.sleep((g.interval / 10).toLong(), (g.interval % 10) * 100000)
      }
     }
    }
@@ -385,7 +390,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  private fun cmdAddTrigger() {
   val (w, h) = screen()
   val t = KmTrigger(w / 2 - dp(150), h / 2, dp(72), true)
-  t.targets.add(KmTarget(w / 2 + dp(120), h / 2, 0, 50, 70))
+  t.targets.add(KmTarget(w / 2 + dp(120), h / 2, 0, 500, 700))
   trigs.add(t)
   buildAll()
   pick(trigs.size - 1, -1)
@@ -400,7 +405,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
   val t = trigs[i]
   val (w, h) = screen()
   val n = t.targets.size
-  t.targets.add(KmTarget(w / 2 + dp(120) + n * dp(30), h / 2 + (n + 1) * dp(40), 0, 50, 70))
+  t.targets.add(KmTarget(w / 2 + dp(120) + n * dp(30), h / 2 + (n + 1) * dp(40), 0, 500, 700))
   buildAll()
   pick(i, t.targets.size - 1)
  }
@@ -561,7 +566,6 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
 
   val top = box(true)
   put(top, tb("＋ Trigger") { cmdAddTrigger() })
-  put(top, tb("＋ Target") { cmdAddTarget() })
   put(top, tb("✕") { cancel() })
   put(top, tb("✓") { done() })
   bar = top
@@ -630,7 +634,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  fun setVisible(on: Boolean) {
   if (on) {
    if (!shown) {
-    load(prefs.getString("data", "") ?: "")
+    loadSaved()
     shown = true
     buildAll()
    }
@@ -648,7 +652,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
  fun showEditor() {
   if (editing) return
   if (!shown) {
-   load(prefs.getString("data", "") ?: "")
+   loadSaved()
    shown = true
   }
   snapshot = serialize()
