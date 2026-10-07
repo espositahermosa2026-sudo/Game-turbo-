@@ -47,9 +47,10 @@ private var km: KmManager? = null
 private var apps: AppsManager? = null
 private var backView: View? = null
 private var msgView: TextView? = null
-private val tealInt = AColor.parseColor("#1DE9B6")
-private val panelBg = AColor.parseColor("#D90B1412")
-private val grayText = AColor.parseColor("#CFD8DC")
+private val tealInt = AColor.parseColor("#E8B65A")
+private val violet = AColor.parseColor("#B04DFF")
+private val panelBg = AColor.parseColor("#D9230A45")
+private val grayText = AColor.parseColor("#EBCB8B")
 private val BAR_WIDTH_DP = 4
 private val BAR_HEIGHT_CM = 2f
 private val HUD_WIDTH_FRACTION = 0.8f
@@ -125,7 +126,7 @@ val container = FrameLayout(this)
 val bar = View(this).apply {
 background = GradientDrawable(
 GradientDrawable.Orientation.TOP_BOTTOM,
-intArrayOf(0x001DE9B6, tealInt, tealInt, 0x001DE9B6)
+intArrayOf(0x00E8B65A, tealInt, tealInt, 0x00E8B65A)
 ).apply {
 shape = GradientDrawable.RECTANGLE
 val r = dp(3).toFloat()
@@ -278,10 +279,10 @@ private fun curRotation(): Int = windowManager.defaultDisplay.rotation
 private fun circleBg(active: Boolean, s: Float): GradientDrawable =
 GradientDrawable().apply {
 shape = GradientDrawable.OVAL
-setColor(if (active) AColor.parseColor("#331DE9B6") else AColor.parseColor("#22FFFFFF"))
+setColor(if (active) AColor.parseColor("#44E8B65A") else AColor.parseColor("#22D9A441"))
 setStroke(
 (3f * s).toInt().coerceAtLeast(1),
-if (active) tealInt else AColor.parseColor("#66FFFFFF")
+if (active) tealInt else AColor.parseColor("#B38B3A")
 )
 }
 private fun buildItem(iconRes: Int, label: String, s: Float): View {
@@ -372,7 +373,7 @@ val th = dp(BAR_WIDTH_DP)
 val ts = (22f * s).toInt()
 val inset = ((ts - th) / 2).coerceAtLeast(0)
 val trackBg = GradientDrawable().apply {
-setColor(0x801DE9B6.toInt()); cornerRadius = th / 2f
+setColor(0x80E8B65A.toInt()); cornerRadius = th / 2f
 }
 val trackFg = GradientDrawable().apply {
 setColor(tealInt); cornerRadius = th / 2f
@@ -417,7 +418,7 @@ val (sw, sh) = screenSize()
 val panelW = if (sw > sh) (sw * HUD_WIDTH_FRACTION).toInt() else (sw * 0.96f).toInt()
 val s = panelW / 1280f
 val root = FrameLayout(this)
-val frame = View(this).apply { background = HudFrame(panelBg, tealInt) }
+val frame = View(this).apply { background = HudFrame(panelBg, violet) }
 root.addView(frame, place(s, 0f, 0f, 1280f, 300f))
 val clock = TextClock(this).apply {
 format12Hour = "hh:mm a"
