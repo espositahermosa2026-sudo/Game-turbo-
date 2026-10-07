@@ -91,11 +91,11 @@ private val gray: Int
   var fps = "--"
   var cpu = "--"
   private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    color = Color.parseColor("#55000000")
+    color = Color.parseColor("#66230A45")
     style = Paint.Style.FILL
   }
   private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    color = Color.parseColor("#991DE9B6")
+    color = Color.parseColor("#99E8B65A")
     style = Paint.Style.STROKE
     strokeWidth = 2f
   }
@@ -104,7 +104,7 @@ private val gray: Int
     style = Paint.Style.FILL
   }
   private val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    color = accent
+    color = Color.WHITE
     textSize = 32f
     typeface = Typeface.DEFAULT_BOLD
     textAlign = Paint.Align.CENTER
@@ -191,7 +191,7 @@ class WinIcon : Drawable() {
 class AppsManager(private val ctx: Context, private val wm: WindowManager) {
   private val d = ctx.resources.displayMetrics.density
   private val prefs = ctx.getSharedPreferences("apps", Context.MODE_PRIVATE)
-  private val teal = Color.parseColor("#1DE9B6")
+  private val teal = Color.parseColor("#B04DFF")
   private val hd = Handler(Looper.getMainLooper())
   private var win: View? = null
   private var msg: View? = null
@@ -241,7 +241,7 @@ class AppsManager(private val ctx: Context, private val wm: WindowManager) {
       t.textSize = 14f
       t.setPadding(dp(14), dp(8), dp(14), dp(8))
       t.background = GradientDrawable().apply {
-        setColor(Color.parseColor("#EE0B1412"))
+        setColor(Color.parseColor("#EE1A0B33"))
         setStroke(dp(1), teal)
         cornerRadius = dp(10).toFloat()
       }
@@ -371,7 +371,7 @@ class AppsManager(private val ctx: Context, private val wm: WindowManager) {
   private fun hint(text: String) {
     val t = TextView(ctx)
     t.text = text
-    t.setTextColor(Color.parseColor("#8A9498"))
+    t.setTextColor(Color.parseColor("#B9A8D9"))
     t.textSize = 12f
     t.setPadding(dp(8), dp(8), dp(8), dp(8))
     list?.addView(t)
@@ -425,7 +425,7 @@ class AppsManager(private val ctx: Context, private val wm: WindowManager) {
     box.orientation = LinearLayout.VERTICAL
     box.setPadding(dp(10), dp(8), dp(10), dp(8))
     box.background = GradientDrawable().apply {
-      setColor(Color.parseColor("#F00B1412"))
+      setColor(Color.parseColor("#F01A0B33"))
       setStroke(dp(2), teal)
       cornerRadius = dp(12).toFloat()
     }
