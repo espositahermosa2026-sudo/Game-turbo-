@@ -203,7 +203,9 @@ class KmSettings(private val ctx: Context, private val wm: WindowManager) {
     onBlock: (Boolean) -> Unit,
     onAdd: () -> Unit,
     onGear: (Int) -> Unit,
-    onDel: (Int) -> Unit
+    onDel: (Int) -> Unit,
+    multi: Boolean = true,
+    onMulti: (Boolean) -> Unit = {}
   ) {
     val c = content()
     c.addView(tv(title, 22f, Color.WHITE, true))
@@ -221,6 +223,16 @@ class KmSettings(private val ctx: Context, private val wm: WindowManager) {
     sw.setOnCheckedChangeListener { _, on -> onBlock(on) }
     r1.addView(sw)
     c.addView(r1)
+    val rm = lin(true)
+    rm.setPadding(0, dp(6), 0, dp(6))
+    rm.addView(tv("Tocar mientras te mueves", 16f, Color.WHITE, true), LinearLayout.LayoutParams(0, -2, 1f))
+    val sm = Switch(ctx)
+    sm.isChecked = multi
+    sm.thumbTintList = sw.thumbTintList
+    sm.trackTintList = sw.trackTintList
+    sm.setOnCheckedChangeListener { _, on -> onMulti(on) }
+    rm.addView(sm)
+    c.addView(rm)
     val r2 = lin(true)
     r2.addView(tv("Total de targets: " + rows.size, 15f, gray), LinearLayout.LayoutParams(0, -2, 1f))
     r2.addView(btn("＋") { onAdd() })
