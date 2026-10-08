@@ -16,7 +16,7 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 
-class KmTarget(var x: Int, var y: Int, var type: Int, var interval: Int, var duration: Int) {
+class KmTarget(var x: Int, var y: Int, var type: Int, var interval: Int, var duration: Int, var delay: Int = 0) {
  var v: KmCircle? = null
  var p: WindowManager.LayoutParams? = null
 }
@@ -64,6 +64,7 @@ class KmManager(private val ctx: Context, private val wm: WindowManager) {
    for (i in 1 until parts.size) {
     val g = parts[i].split(",").mapNotNull { it.toIntOrNull() }
     if (g.size == 5) t.targets.add(KmTarget(g[0], g[1], g[2].coerceIn(0, 3), g[3] * mul, g[4] * mul))
+    if (g.size == 6) t.targets.add(KmTarget(g[0], g[1], g[2].coerceIn(0, 3), g[3], g[4], g[5]))
     if (g.size == 3) t.targets.add(KmTarget(g[0], g[1], 0, 500, 700))
    }
    trigs.add(t)
@@ -77,7 +78,7 @@ private fun loadSaved() {
 
  private fun serialize(): String = trigs.joinToString("|") { t ->
   "${t.x},${t.y},${t.size},${if (t.block) 1 else 0}" +
-   t.targets.joinToString("") { ";${it.x},${it.y},${it.type},${it.interval},${it.duration}" }
+   t.targets.joinToString("") { ";${it.x},${it.y},${it.type},${it.interval},${it.duration},${it.delay}" }
  }
 
  private fun save() {
@@ -128,6 +129,10 @@ private fun loadSaved() {
   ShizukuHelper.runCommand("input swipe ${g.x} ${g.y} ${g.x} ${g.y} $ms")
  }
 
+ private fun nap(t: Int) {
+  if (t > 0) Thread.sleep((t / 10).toLong(), (t % 10) * 100000)
+ }
+
  private fun press(t: KmTrigger, down: Boolean) {
   t.holding = down
   if (!down || t.busy || t.targets.isEmpty()) return
@@ -135,28 +140,35 @@ private fun loadSaved() {
   Thread {
    val all = t.targets.toList()
    for (g in all) {
-    if (g.type == 0) {
+    if (g.type == 0 || g.type == 2) {
+     nap(g.delay)
      tap(g)
-    } else if (g.type == 2) {
-     tap(g)
-     Thread.sleep(60)
-     tap(g)
+     if (g.type == 2) {
+      Thread.sleep(60)
+      tap(g)
+     }
     }
    }
    val reps = all.filter { it.type == 1 }
+   var first = true
    while (t.holding) {
     if (reps.isEmpty()) {
      Thread.sleep(10)
     } else {
      for (g in reps) {
       if (!t.holding) break
+      if (first) nap(g.delay)
       tap(g)
-      Thread.sleep((g.interval / 10).toLong(), (g.interval % 10) * 100000)
+      nap(g.interval)
      }
+     first = false
     }
    }
    for (g in all) {
-    if (g.type == 3) tap(g)
+    if (g.type == 3) {
+     nap(g.delay)
+     tap(g)
+    }
    }
    t.busy = false
   }.start()
@@ -496,7 +508,9 @@ private fun loadSaved() {
     g.duration = duration
     showTriggerSettings(ti)
    },
-   { showTriggerSettings(ti) }
+   { showTriggerSettings(ti) },
+   g.delay,
+   { g.delay = it }
   )
  }
 
