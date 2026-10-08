@@ -266,12 +266,15 @@ class KmSettings(private val ctx: Context, private val wm: WindowManager) {
     interval0: Int,
     duration0: Int,
     onSave: (Int, Int, Int) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    delay0: Int = 0,
+    onDelay: (Int) -> Unit = {}
   ) {
     val c = content()
     var type = type0
     var interval = interval0
     var duration = duration0
+    var delay = delay0
     c.addView(tv(title, 22f, Color.WHITE, true))
 
     val seg = lin(true)
@@ -301,20 +304,22 @@ class KmSettings(private val ctx: Context, private val wm: WindowManager) {
     c.addView(seg)
 
     fun fmt(v: Int): String = if (v % 10 == 0) "${v / 10} ms" else "${v / 10}.${v % 10} ms"
-    fun slider(label: String, start: Int, onChange: (Int) -> Unit) {
+    val body = LinearLayout(ctx)
+    body.orientation = LinearLayout.VERTICAL
+    fun slider(label: String, start: Int, lo: Int, onChange: (Int) -> Unit) {
       val head = lin(true)
       head.addView(tv(label, 16f, Color.WHITE), LinearLayout.LayoutParams(0, -2, 1f))
-      val vt = tv(fmt(start.coerceIn(1, 10000)), 16f, Color.WHITE, true)
+      val vt = tv(fmt(start.coerceIn(lo, 10000)), 16f, Color.WHITE, true)
       head.addView(vt)
-      c.addView(head)
+      body.addView(head)
       val sk = SeekBar(ctx)
-      sk.max = 9999
-      sk.progress = start.coerceIn(1, 10000) - 1
+      sk.max = 10000 - lo
+      sk.progress = start.coerceIn(lo, 10000) - lo
       fun apply(p: Int) {
-        val q = p.coerceIn(0, 9999)
+        val q = p.coerceIn(0, 10000 - lo)
         sk.progress = q
-        vt.text = fmt(q + 1)
-        onChange(q + 1)
+        vt.text = fmt(q + lo)
+        onChange(q + lo)
       }
       fun step(v: Int): Int = if (v < 100) 1 else if (v < 1000) 10 else 100
       sk.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -325,22 +330,26 @@ class KmSettings(private val ctx: Context, private val wm: WindowManager) {
         override fun onStopTrackingTouch(s: SeekBar?) {}
       })
       val row = lin(true)
-      row.setPadding(0, dp(4), 0, dp(10))
-      row.addView(btn("−") { apply(sk.progress - step(sk.progress)) })
+      row.setPadding(0, dp(2), 0, dp(8))
+      row.addView(btn("−") { apply(sk.progress - step(sk.progress + lo)) })
       row.addView(sk, LinearLayout.LayoutParams(0, -2, 1f))
-      row.addView(btn("＋") { apply(sk.progress + step(sk.progress + 1)) })
-      c.addView(row)
+      row.addView(btn("＋") { apply(sk.progress + step(sk.progress + lo + 1)) })
+      body.addView(row)
     }
-    slider("Intervalo de toque:", interval) { interval = it }
-    slider("Duración del toque:", duration) { duration = it }
-    c.addView(tv("Rango: de 0.1 ms a 1000 ms", 13f, teal))
-
-    val spacer = View(ctx)
-    c.addView(spacer, LinearLayout.LayoutParams(-1, 0, 1f))
+    slider("Espera antes del toque:", delay, 0) { delay = it }
+    slider("Intervalo de toque:", interval, 1) { interval = it }
+    slider("Duración del toque:", duration, 1) { duration = it }
+    body.addView(tv("Rango: de 0.1 ms a 1000 ms", 13f, teal))
+    val sv = ScrollView(ctx)
+    sv.addView(body)
+    c.addView(sv, LinearLayout.LayoutParams(-1, 0, 1f))
     val bottom = lin(true)
     bottom.gravity = Gravity.END
     bottom.addView(btn("Cancelar") { onCancel() }, gap())
-    bottom.addView(btn("Guardar") { onSave(type, interval, duration) }, gap())
+    bottom.addView(btn("Guardar") {
+      onDelay(delay)
+      onSave(type, interval, duration)
+    }, gap())
     c.addView(bottom, LinearLayout.LayoutParams(-1, -2))
   }
 }
