@@ -246,7 +246,18 @@ object ShizukuHelper {
         commit()
     }
 
+    // Arma un evento de entrada (24 bytes) como secuencia de escapes para printf
+    private fun ev(sb: StringBuilder, type: Int, code: Int, value: Int) {
+        for (i in 0 until 16) sb.append("\\000")
+        sb.append("\\").append(String.format("%03o", type and 0xFF))
+        sb.append("\\").append(String.format("%03o", (type shr 8) and 0xFF))
+        sb.append("\\").append(String.format("%03o", code and 0xFF))
+        sb.append("\\").append(String.format("%03o", (code shr 8) and 0xFF))
+        for (i in 0 until 4) sb.append("\\").append(String.format("%03o", (value shr (8 * i)) and 0xFF))
+    }
+
     // Toca en (sx, sy) de la pantalla sin cortar los dedos que ya estén tocando. Devuelve false si no se pudo.
+    // Cada paso (apretar y soltar) se escribe completo de un solo golpe para que no se mezcle con los dedos reales.
     fun rawTap(sx: Int, sy: Int, ms: Int, w: Int, h: Int, rot: Int): Boolean {
         initTouch()
         if (!tReady) return false
@@ -277,14 +288,20 @@ object ShizukuHelper {
         val ry = (ny.toLong() * (tMaxY + 1) / hn).toInt().coerceIn(0, tMaxY)
         val slot = minOf(tSlot, 9)
         tid = if (tid > 60000) 2000 else tid + 1
-        val e = "sendevent $tDev"
-        val sb = StringBuilder()
-        sb.append("$e 3 47 $slot; $e 3 57 $tid; $e 3 53 $rx; $e 3 54 $ry; ")
-        if (tMajor) sb.append("$e 3 48 6; ")
-        if (tPress) sb.append("$e 3 58 60; ")
-        sb.append("$e 0 0 0; sleep ${String.format(java.util.Locale.US, "%.3f", ms / 1000.0)}; ")
-        sb.append("$e 3 47 $slot; $e 3 57 -1; $e 0 0 0")
-        val out = runCommand("( $sb ) 2>&1")
+        val down = StringBuilder()
+        ev(down, 3, 47, slot)
+        ev(down, 3, 57, tid)
+        ev(down, 3, 53, rx)
+        ev(down, 3, 54, ry)
+        if (tMajor) ev(down, 3, 48, 6)
+        if (tPress) ev(down, 3, 58, 60)
+        ev(down, 0, 0, 0)
+        val up = StringBuilder()
+        ev(up, 3, 47, slot)
+        ev(up, 3, 57, -1)
+        ev(up, 0, 0, 0)
+        val sec = String.format(java.util.Locale.US, "%.3f", ms / 1000.0)
+        val out = runCommand("( printf '$down' > $tDev; sleep $sec; printf '$up' > $tDev ) 2>&1")
         if (out.isNotBlank()) {
             tReady = false
             return false
@@ -294,8 +311,11 @@ object ShizukuHelper {
 
     fun rawRelease() {
         if (!tReady) return
-        val e = "sendevent $tDev"
-        runCommand("( $e 3 47 ${minOf(tSlot, 9)}; $e 3 57 -1; $e 0 0 0 ) 2>&1")
+        val up = StringBuilder()
+        ev(up, 3, 47, minOf(tSlot, 9))
+        ev(up, 3, 57, -1)
+        ev(up, 0, 0, 0)
+        runCommand("( printf '$up' > $tDev ) 2>&1")
     }
 
     private val lock = Any()
