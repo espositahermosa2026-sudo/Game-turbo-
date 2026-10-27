@@ -274,15 +274,8 @@ rotView = null
 }
 @Suppress("DEPRECATION")
 private fun curRotation(): Int = windowManager.defaultDisplay.rotation
-private fun circleBg(active: Boolean, s: Float): GradientDrawable =
-GradientDrawable().apply {
-shape = GradientDrawable.OVAL
-setColor(if (active) AColor.parseColor("#FF102A") else AColor.parseColor("#B315151C"))
-setStroke(
-(3f * s).toInt().coerceAtLeast(1),
-if (active) AColor.WHITE else AColor.parseColor("#FF102A")
-)
-}
+private fun circleBg(active: Boolean, s: Float): Drawable = HudHexButton(active, s)
+
 private fun buildItem(iconRes: Int, label: String, s: Float): View {
 val canToggle = label in toggleLabels
 val startActive = canToggle && (toggleStates[label] == true)
@@ -291,11 +284,7 @@ val item = LinearLayout(this).apply {
 orientation = LinearLayout.VERTICAL
 gravity = Gravity.CENTER_HORIZONTAL
 setPadding(0, (12f * s).toInt(), 0, 0)
-background = GradientDrawable().apply {
-setColor(AColor.parseColor("#3315151C"))
-setStroke((2f * s).toInt().coerceAtLeast(1), AColor.parseColor("#292932"))
-cornerRadius = 14f * s
-}
+background = HudPanel(10f * s)
 }
 val circle = LinearLayout(this).apply {
 gravity = Gravity.CENTER
