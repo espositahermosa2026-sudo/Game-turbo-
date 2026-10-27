@@ -386,7 +386,7 @@ return sk
 }
 private fun showPanel() {
 val (sw, sh) = screenSize()
-val s = minOf(sw / 1882f, sh / 836f) * 0.72f
+val s = minOf(sw / 1882f, sh / 836f)
 val defs = listOf(
 -4 to "Edit Keymap",
 -3 to "Girar pantalla",
