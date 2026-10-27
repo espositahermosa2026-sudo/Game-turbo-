@@ -367,12 +367,20 @@ object ShizukuHelper {
         running = true
         val gen = ++generation
         lastTotal = 0L
+        lastIdle = 0L
+        layerName = null
+        lastFind = 0L
+        cpu = "--"
+        fps = "--"
         Thread {
             while (running && gen == generation) {
                 if (isReady()) {
                     try { cpu = readCpu() } catch (e: Exception) { cpu = "--" }
-                    try { fps = readFps() } catch (e: Exception) { fps = "--" }
                     try { maybeFindLayer() } catch (e: Exception) { }
+                    try { fps = readFps() } catch (e: Exception) { fps = "--" }
+                } else {
+                    cpu = "--"
+                    fps = "--"
                 }
                 Thread.sleep(1000)
             }
@@ -390,12 +398,15 @@ object ShizukuHelper {
         if (p.size < 8 || p[0] != "cpu") return "--"
         val v = p.drop(1).mapNotNull { it.toLongOrNull() }
         if (v.size < 7) return "--"
+        // /proc/stat: idle + iowait cuentan como tiempo no ocupado.
+        // Se usa la diferencia entre dos muestras consecutivas del sistema.
         val idle = v[3] + v[4]
         val total = v.take(8).sum()
         val dTotal = total - lastTotal
         val dIdle = idle - lastIdle
-        val result = if (lastTotal > 0L && dTotal > 0L) {
-            (100L * (dTotal - dIdle) / dTotal).toInt().coerceIn(0, 100).toString()
+        val result = if (lastTotal > 0L && dTotal > 0L && dIdle >= 0L) {
+            (100.0 * (dTotal - dIdle).coerceAtLeast(0L).toDouble() / dTotal.toDouble())
+                .toInt().coerceIn(0, 100).toString()
         } else {
             "--"
         }
@@ -424,13 +435,21 @@ object ShizukuHelper {
     }
 
     private fun fpsOf(times: List<Long>): Int? {
-        if (times.size < 2) return null
-        val newest = times.maxOrNull() ?: return null
-        val window = times.filter { it > newest - 1_000_000_000L }
-        val oldest = window.minOrNull() ?: return null
-        val span = newest - oldest
-        if (window.size < 2 || span <= 0L) return null
-        return ((window.size - 1) * 1_000_000_000.0 / span).toInt().coerceIn(0, 240)
+        // SurfaceFlinger puede devolver timestamps repetidos o fuera de orden.
+        // Contamos solo marcas válidas y distintas dentro del segundo más reciente.
+        val ordered = times.asSequence()
+            .filter { it > 0L }
+            .distinct()
+            .sorted()
+            .toList()
+        if (ordered.size < 2) return null
+        val newest = ordered.last()
+        val window = ordered.filter { it > newest - 1_000_000_000L }
+        if (window.size < 2) return null
+        val span = window.last() - window.first()
+        if (span <= 0L) return null
+        return (((window.size - 1) * 1_000_000_000.0) / span)
+            .toInt().coerceIn(1, 240)
     }
 
     // Busca la capa del juego que dibuja más cuadros por segundo (solo 2 comandos en total)
