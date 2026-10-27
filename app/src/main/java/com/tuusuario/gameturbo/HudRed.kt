@@ -159,6 +159,45 @@ class HudGlyph(private val kind: Int, private val tint: Int) : Drawable() {
   override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 
+
+// Botón hexagonal para el HUD futurista: negro translúcido y contorno rojo neón.
+class HudHexButton(private val active: Boolean, private val scale: Float) : Drawable() {
+  private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = if (active) Color.parseColor("#CCFF102A") else Color.parseColor("#EE101016")
+    style = Paint.Style.FILL
+  }
+  private val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = Color.parseColor(if (active) "#AAFF102A" else "#66FF102A")
+    style = Paint.Style.STROKE
+    strokeWidth = 4f * scale
+  }
+  private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    color = if (active) Color.WHITE else HRed
+    style = Paint.Style.STROKE
+    strokeWidth = 1.8f * scale
+  }
+  private val path = Path()
+  override fun draw(canvas: Canvas) {
+    val b = bounds
+    val inset = 3f * scale
+    val l = b.left + inset; val t = b.top + inset
+    val r = b.right - inset; val bot = b.bottom - inset
+    val cut = (r - l) * 0.22f
+    path.reset()
+    path.moveTo(l + cut, t); path.lineTo(r - cut, t)
+    path.lineTo(r, t + (bot - t) * 0.25f)
+    path.lineTo(r, bot - (bot - t) * 0.25f)
+    path.lineTo(r - cut, bot); path.lineTo(l + cut, bot)
+    path.lineTo(l, bot - (bot - t) * 0.25f)
+    path.lineTo(l, t + (bot - t) * 0.25f); path.close()
+    canvas.drawPath(path, fill); canvas.drawPath(path, glow); canvas.drawPath(path, edge)
+  }
+  override fun setAlpha(alpha: Int) { fill.alpha = alpha; glow.alpha = alpha; edge.alpha = alpha }
+  override fun setColorFilter(colorFilter: ColorFilter?) { fill.colorFilter = colorFilter }
+  @Suppress("OVERRIDE_DEPRECATION")
+  override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+}
+
 // Panel central: tres medidores circulares RAM / FPS / CPU
 class HudGauges(context: Context, private val s: Float) : View(context) {
   var ram = 0
