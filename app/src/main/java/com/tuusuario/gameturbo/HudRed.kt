@@ -272,21 +272,6 @@ class HudSide(context: Context, private val s: Float) : View(context) {
   }
 }
 
-// Emblema original GAME PLAY: escudo angular y monograma GP en rojo neón.
-class HudLogo(context: Context, private val s: Float) : View(context) {
-  private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-  private val path = Path()
-  override fun onDraw(c: Canvas) {
-    c.save(); c.scale(s, s)
-    p.style = Paint.Style.FILL; p.color = Color.parseColor("#191017")
-    path.reset(); path.moveTo(42f, 4f); path.lineTo(76f, 17f); path.lineTo(72f, 54f); path.lineTo(42f, 76f); path.lineTo(12f, 54f); path.lineTo(8f, 17f); path.close(); c.drawPath(path,p)
-    p.style = Paint.Style.STROKE; p.strokeWidth = 3f; p.color = HRed; c.drawPath(path,p)
-    p.style = Paint.Style.FILL; p.typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD_ITALIC); p.textAlign = Paint.Align.CENTER; p.textSize = 35f; p.color = Color.WHITE; c.drawText("G", 34f, 49f, p); p.color = HRed; c.drawText("P", 53f, 58f, p)
-    p.style = Paint.Style.STROKE; p.strokeWidth = 2f; p.color = HRed; c.drawLine(19f, 61f, 34f, 69f, p); c.drawLine(65f, 12f, 72f, 21f, p)
-    c.restore()
-  }
-}
-
 // Banner de la derecha con un diseño original
 class HudBanner(context: Context, private val s: Float) : View(context) {
   private val p = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -316,20 +301,6 @@ class HudBanner(context: Context, private val s: Float) : View(context) {
     poly(c, 340f, 240f, 352f, 120f, 400f, 52f, 470f, 18f, 540f, 32f, 584f, 92f, 584f, 240f)
     p.color = Color.parseColor("#CCFF102A")
     poly(c, 420f, 112f, 510f, 94f, 574f, 120f, 502f, 152f, 432f, 142f)
-    // Retrato estilizado de un gamer encapuchado, dibujado en el propio panel.
-    p.style = Paint.Style.FILL
-    p.color = Color.parseColor("#252630")
-    path.reset(); path.moveTo(365f, 240f); path.lineTo(382f, 172f); path.lineTo(407f, 145f); path.lineTo(423f, 92f); path.lineTo(458f, 60f); path.lineTo(495f, 67f); path.lineTo(523f, 103f); path.lineTo(532f, 145f); path.lineTo(559f, 170f); path.lineTo(579f, 240f); path.close(); c.drawPath(path, p)
-    p.color = Color.parseColor("#111116")
-    path.reset(); path.moveTo(418f, 103f); path.lineTo(438f, 75f); path.lineTo(486f, 78f); path.lineTo(514f, 111f); path.lineTo(504f, 153f); path.lineTo(478f, 179f); path.lineTo(443f, 164f); path.lineTo(424f, 139f); path.close(); c.drawPath(path,p)
-    p.color = Color.parseColor("#FF102A")
-    path.reset(); path.moveTo(425f, 125f); path.lineTo(449f, 118f); path.lineTo(469f, 126f); path.lineTo(490f, 116f); path.lineTo(507f, 125f); path.lineTo(493f, 143f); path.lineTo(470f, 138f); path.lineTo(448f, 145f); path.close(); c.drawPath(path,p)
-    p.style = Paint.Style.STROKE; p.strokeWidth = 3f; p.color = Color.parseColor("#FFFF5265")
-    c.drawLine(433f, 128f, 458f, 130f, p); c.drawLine(478f, 130f, 500f, 127f, p)
-    p.style = Paint.Style.FILL; p.color = Color.parseColor("#15151C")
-    path.reset(); path.moveTo(400f, 190f); path.lineTo(433f, 166f); path.lineTo(468f, 184f); path.lineTo(503f, 166f); path.lineTo(542f, 194f); path.lineTo(557f, 240f); path.lineTo(385f, 240f); path.close(); c.drawPath(path,p)
-    p.style = Paint.Style.STROKE; p.strokeWidth = 4f; p.color = HRed
-    c.drawLine(399f, 204f, 430f, 181f, p); c.drawLine(503f, 181f, 540f, 207f, p)
     p.style = Paint.Style.STROKE
     p.strokeWidth = 3f
     p.color = HRed
@@ -396,6 +367,16 @@ class HudRed(private val ctx: Context, private val s: Float) {
     return v
   }
 
+  private fun art(resId: Int, scaleType: ImageView.ScaleType = ImageView.ScaleType.FIT_CENTER): ImageView {
+    return ImageView(ctx).apply {
+      setImageResource(resId)
+      this.scaleType = scaleType
+      setLayerType(View.LAYER_TYPE_HARDWARE, null)
+      isClickable = false
+      isFocusable = false
+    }
+  }
+
   private fun line(root: FrameLayout, x: Float, y: Float, w: Float) {
     val v = View(ctx)
     v.setBackgroundColor(HRed)
@@ -410,9 +391,7 @@ class HudRed(private val ctx: Context, private val s: Float) {
     line(root, 470f, 92f, 220f)
     line(root, 1190f, 92f, 250f)
     panel(root, 20f, 45f, 450f, 95f)
-    val g = text("G", 58f, HRed)
-    g.setTypeface(Typeface.DEFAULT_BOLD, Typeface.ITALIC)
-    at(root, g, 52f, 58f, 60f, 70f)
+    at(root, art(R.drawable.gameplay_dragon, ImageView.ScaleType.FIT_CENTER), 38f, 48f, 86f, 86f)
     val clock = TextClock(ctx)
     clock.format12Hour = "hh:mm a"
     clock.format24Hour = "HH:mm"
@@ -424,7 +403,7 @@ class HudRed(private val ctx: Context, private val s: Float) {
     at(root, clock, 125f, 60f, 330f, 65f)
 
     panel(root, 690f, 32f, 500f, 120f, 24f)
-    at(root, HudLogo(ctx, s), 716f, 52f, 80f, 80f)
+    at(root, glyph(3, HRed), 722f, 62f, 60f, 60f)
     at(root, text("GAME PLAY", 46f, Color.WHITE, 0.12f, true), 790f, 52f, 380f, 80f)
 
     panel(root, 1440f, 55f, 420f, 92f)
@@ -453,10 +432,13 @@ class HudRed(private val ctx: Context, private val s: Float) {
     val gg = HudGauges(ctx, s)
     gauges = gg
     at(root, gg, 668f, 165f, 564f, 375f)
+    // Emblema de dragón sobre la placa central, a juego con la referencia.
+    at(root, art(R.drawable.gameplay_dragon, ImageView.ScaleType.FIT_CENTER), 936f, 464f, 92f, 70f)
 
     // ---- panel derecho ----
     panel(root, 1238f, 140f, 624f, 442f)
     at(root, HudBanner(ctx, s), 1258f, 160f, 584f, 240f)
+    at(root, art(R.drawable.gameplay_character, ImageView.ScaleType.CENTER_CROP), 1638f, 160f, 204f, 156f)
     items["Grabar"]?.let { at(root, it, 1262f, 418f, 265f, 150f) }
     items["Apps flotantes"]?.let { at(root, it, 1540f, 418f, 290f, 150f) }
 
