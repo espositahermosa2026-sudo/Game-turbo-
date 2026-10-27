@@ -47,10 +47,8 @@ private var km: KmManager? = null
 private var apps: AppsManager? = null
 private var backView: View? = null
 private var msgView: TextView? = null
-private val tealInt = AColor.parseColor("#E8B65A")
-private val violet = AColor.parseColor("#B04DFF")
-private val panelBg = AColor.parseColor("#D9230A45")
-private val grayText = AColor.parseColor("#EBCB8B")
+private val tealInt = AColor.parseColor("#FF102A")
+private val grayText = AColor.parseColor("#FFFFFF")
 private val BAR_WIDTH_DP = 4
 private val BAR_HEIGHT_CM = 2f
 private val HUD_WIDTH_FRACTION = 0.8f
@@ -66,7 +64,7 @@ private val toggleLabels = setOf(
 )
 private val toggleStates = mutableMapOf<String, Boolean>()
 private val handler = Handler(Looper.getMainLooper())
-private var statsView: HudStats? = null
+private var statsView: HudGauges? = null
 private val statsRunnable = object : Runnable {
 override fun run() {
 refreshStats()
@@ -126,7 +124,7 @@ val container = FrameLayout(this)
 val bar = View(this).apply {
 background = GradientDrawable(
 GradientDrawable.Orientation.TOP_BOTTOM,
-intArrayOf(0x00E8B65A, tealInt, tealInt, 0x00E8B65A)
+intArrayOf(0x00FF102A, tealInt, tealInt, 0x00FF102A)
 ).apply {
 shape = GradientDrawable.RECTANGLE
 val r = dp(3).toFloat()
@@ -279,10 +277,10 @@ private fun curRotation(): Int = windowManager.defaultDisplay.rotation
 private fun circleBg(active: Boolean, s: Float): GradientDrawable =
 GradientDrawable().apply {
 shape = GradientDrawable.OVAL
-setColor(if (active) AColor.parseColor("#44E8B65A") else AColor.parseColor("#22D9A441"))
+setColor(if (active) AColor.parseColor("#FF102A") else AColor.parseColor("#B315151C"))
 setStroke(
 (3f * s).toInt().coerceAtLeast(1),
-if (active) tealInt else AColor.parseColor("#B38B3A")
+if (active) AColor.WHITE else AColor.parseColor("#FF102A")
 )
 }
 private fun buildItem(iconRes: Int, label: String, s: Float): View {
@@ -292,6 +290,12 @@ val circleSize = (64f * s).toInt()
 val item = LinearLayout(this).apply {
 orientation = LinearLayout.VERTICAL
 gravity = Gravity.CENTER_HORIZONTAL
+setPadding(0, (12f * s).toInt(), 0, 0)
+background = GradientDrawable().apply {
+setColor(AColor.parseColor("#3315151C"))
+setStroke((2f * s).toInt().coerceAtLeast(1), AColor.parseColor("#292932"))
+cornerRadius = 14f * s
+}
 }
 val circle = LinearLayout(this).apply {
 gravity = Gravity.CENTER
@@ -299,7 +303,7 @@ background = circleBg(startActive, s)
 }
 val icon = ImageView(this).apply {
 if (iconRes == -5) setImageDrawable(WinIcon()) else if (iconRes < 0) setImageDrawable(GtIcon(-iconRes)) else setImageResource(iconRes)
-setColorFilter(if (startActive) tealInt else grayText)
+setColorFilter(if (startActive) AColor.WHITE else tealInt)
 }
 val iconSize = (34f * s).toInt()
 circle.addView(icon, LinearLayout.LayoutParams(iconSize, iconSize))
@@ -322,16 +326,16 @@ item.setOnClickListener {
 runFunction(label) {
 if (label == "Limpiador de RAM") handler.postDelayed({
 circle.background = circleBg(false, s)
-icon.setColorFilter(grayText)
+icon.setColorFilter(tealInt)
 }, 1500)
 }
 if (canToggle) {
 val active = toggleStates[label] == true
 circle.background = circleBg(active, s)
-icon.setColorFilter(if (active) tealInt else grayText)
+icon.setColorFilter(if (active) AColor.WHITE else tealInt)
 } else if (label == "Limpiador de RAM") {
 circle.background = circleBg(true, s)
-icon.setColorFilter(tealInt)
+icon.setColorFilter(AColor.WHITE)
 }
 if (label.endsWith("RAM")) {
 handler.postDelayed({ refreshStats() }, 1500)
@@ -341,7 +345,7 @@ if (label == "Crosshair Assistant" || label == "Edit Keymap") {
 item.setOnLongClickListener {
 toggleStates[label] = true
 circle.background = circleBg(true, s)
-icon.setColorFilter(tealInt)
+icon.setColorFilter(AColor.WHITE)
 if (panelVisible) togglePanel()
 if (label == "Edit Keymap") km?.showEditor() else mira?.showMenu()
 true
@@ -349,115 +353,54 @@ true
 }
 return item
 }
-private fun buildSlider(
-symbol: String,
-symbolFirst: Boolean,
-maxValue: Int,
-startValue: Int,
-s: Float,
-onChange: (Int) -> Unit
-): LinearLayout {
-val row = LinearLayout(this).apply {
-orientation = LinearLayout.HORIZONTAL
-gravity = Gravity.CENTER_VERTICAL
-}
-val sym = TextView(this).apply {
-text = symbol
-setTextSize(TypedValue.COMPLEX_UNIT_PX, 26f * s)
-setTextColor(tealInt)
-}
-val bar = SeekBar(this).apply {
-this.max = maxValue
-this.progress = startValue
-val th = dp(BAR_WIDTH_DP)
-val ts = (22f * s).toInt()
+private fun redSeek(maxV: Int, start: Int, s: Float, onChange: (Int) -> Unit): SeekBar {
+val sk = SeekBar(this)
+sk.max = maxV
+sk.progress = start
+val th = (8f * s).toInt().coerceAtLeast(2)
+val ts = (30f * s).toInt()
 val inset = ((ts - th) / 2).coerceAtLeast(0)
-val trackBg = GradientDrawable().apply {
-setColor(0x80E8B65A.toInt()); cornerRadius = th / 2f
+val bg = GradientDrawable().apply {
+setColor(AColor.parseColor("#292932"))
+cornerRadius = th / 2f
 }
-val trackFg = GradientDrawable().apply {
-setColor(tealInt); cornerRadius = th / 2f
+val fg = GradientDrawable().apply {
+setColor(tealInt)
+cornerRadius = th / 2f
 }
-progressDrawable = LayerDrawable(arrayOf(trackBg, ClipDrawable(trackFg, Gravity.START, ClipDrawable.HORIZONTAL))).apply {
+sk.progressDrawable = LayerDrawable(arrayOf(bg, ClipDrawable(fg, Gravity.START, ClipDrawable.HORIZONTAL))).apply {
 setId(0, android.R.id.background)
 setId(1, android.R.id.progress)
 setLayerInset(0, 0, inset, 0, inset)
 setLayerInset(1, 0, inset, 0, inset)
 }
-thumb = GtDiamond((22f * s).toInt(), tealInt)
-setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+sk.thumb = GtDiamond(ts, tealInt)
+sk.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+override fun onProgressChanged(b: SeekBar?, p: Int, fromUser: Boolean) {
 if (fromUser) onChange(p)
 }
-override fun onStartTrackingTouch(sb: SeekBar?) {}
-override fun onStopTrackingTouch(sb: SeekBar?) {}
+override fun onStartTrackingTouch(b: SeekBar?) {}
+override fun onStopTrackingTouch(b: SeekBar?) {}
 })
-}
-val barLp = LinearLayout.LayoutParams(0, (22f * s).toInt(), 1f)
-val symLp = LinearLayout.LayoutParams(
-LinearLayout.LayoutParams.WRAP_CONTENT,
-LinearLayout.LayoutParams.WRAP_CONTENT
-)
-if (symbolFirst) {
-row.addView(sym, symLp)
-row.addView(bar, barLp)
-} else {
-row.addView(bar, barLp)
-row.addView(sym, symLp)
-}
-return row
-}
-private fun place(s: Float, x: Float, y: Float, w: Float, h: Float): FrameLayout.LayoutParams =
-FrameLayout.LayoutParams((w * s).toInt(), (h * s).toInt()).apply {
-gravity = Gravity.TOP or Gravity.START
-leftMargin = (x * s).toInt()
-topMargin = (y * s).toInt()
+return sk
 }
 private fun showPanel() {
 val (sw, sh) = screenSize()
-val panelW = if (sw > sh) (sw * HUD_WIDTH_FRACTION).toInt() else (sw * 0.96f).toInt()
-val s = panelW / 1280f
-val root = FrameLayout(this)
-val frame = View(this).apply { background = HudFrame(panelBg, violet) }
-root.addView(frame, place(s, 0f, 0f, 1280f, 300f))
-val clock = TextClock(this).apply {
-format12Hour = "hh:mm a"
-format24Hour = "HH:mm"
-setTextColor(AColor.WHITE)
-setTextSize(TypedValue.COMPLEX_UNIT_PX, 22f * s)
-typeface = Typeface.DEFAULT_BOLD
-gravity = Gravity.CENTER
-setShadowLayer(4f, 0f, 0f, AColor.BLACK)
-}
-root.addView(clock, place(s, 440f, 2f, 400f, 28f))
-val stats = HudStats(this, s, tealInt, grayText)
-statsView = stats
-root.addView(stats, place(s, 440f, 64f, 400f, 156f))
-val leftItems = listOf(
+val s = minOf(sw / 1882f, sh / 836f)
+val defs = listOf(
 -4 to "Edit Keymap",
 -3 to "Girar pantalla",
 R.drawable.ic_cpu to "Alto rend.",
 -1 to "Crosshair Assistant",
-R.drawable.ic_bell_off to "Bloq. notif."
-)
-val rightItems = listOf(
+R.drawable.ic_bell_off to "Bloq. notif.",
 -2 to "Limpiador de RAM",
 R.drawable.ic_gesture_off to "Bloq. gestos",
 R.drawable.ic_chart to "Info real",
 R.drawable.ic_record to "Grabar",
 -5 to "Apps flotantes"
 )
-val leftCols = floatArrayOf(74f, 205f, 336f)
-val rightCols = floatArrayOf(944f, 1075f, 1206f)
-val rowTops = floatArrayOf(24f, 148f)
-leftItems.forEachIndexed { i, (iconRes, label) ->
-val v = buildItem(iconRes, label, s)
-root.addView(v, place(s, leftCols[i % 3] - 65f, rowTops[i / 3], 130f, 116f))
-}
-rightItems.forEachIndexed { i, (iconRes, label) ->
-val v = buildItem(iconRes, label, s)
-root.addView(v, place(s, rightCols[i % 3] - 65f, rowTops[i / 3], 130f, 116f))
-}
+val items = HashMap<String, View>()
+for ((icon, name) in defs) items[name] = buildItem(icon, name, s)
 val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 val maxVol = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
 val curVol = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -466,42 +409,28 @@ Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
 } catch (e: Exception) {
 128
 }
-val brightness = buildSlider("☀", true, 255, curBright, s) { v -> ShizukuHelper.setBrightness(v) }
-root.addView(brightness, place(s, 20f, 312f, 330f, 46f))
-val volume = buildSlider("🔊", false, maxVol, curVol, s) { v ->
+val bright = redSeek(255, curBright, s) { v -> ShizukuHelper.setBrightness(v) }
+val vol = redSeek(maxVol, curVol, s) { v ->
 try {
 audio.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0)
 } catch (e: Exception) {
 }
 }
-root.addView(volume, place(s, 930f, 312f, 330f, 46f))
-val closeBtn = TextView(this).apply {
-text = "✕"
-setTextSize(TypedValue.COMPLEX_UNIT_PX, 30f * s)
-setTextColor(tealInt)
-gravity = Gravity.CENTER
-setOnClickListener { togglePanel() }
-}
-root.addView(closeBtn, place(s, 590f, 312f, 100f, 46f))
-val msg = TextView(this).apply {
-setTextSize(TypedValue.COMPLEX_UNIT_PX, 22f * s)
-setTextColor(tealInt)
-gravity = Gravity.CENTER
-setShadowLayer(4f, 0f, 0f, AColor.BLACK)
-}
-msgView = msg
-root.addView(msg, place(s, 160f, 364f, 960f, 40f))
+val hud = HudRed(this, s)
+val root = hud.build(items, bright, vol) { togglePanel() }
+statsView = hud.gauges
+msgView = hud.msg
 val params = WindowManager.LayoutParams(
-panelW,
-(406f * s).toInt(),
+(1882f * s).toInt(),
+(836f * s).toInt(),
 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
 PixelFormat.TRANSLUCENT
 )
-params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-params.x = 0
-params.y = dp(4)
+params.gravity = Gravity.CENTER
+if (Build.VERSION.SDK_INT >= 28) params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
 panelView = root
 windowManager.addView(root, params)
 }
